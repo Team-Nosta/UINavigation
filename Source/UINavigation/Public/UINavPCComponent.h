@@ -263,12 +263,12 @@ public:
 	/*
 	Holds the key names for gamepad
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = UINavController, meta = (RequiredAssetDataTags = "RowStructure=/Script/UINavigation.InputNameMapping"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = UINavController, meta = (RequiredAssetDataTags = "RowStructure=/Script/UINavigation.InputNameMapping"))
 	UDataTable* GamepadKeyNameData = nullptr;
 	/*
 	Holds the key names for mouse and keyboard
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = UINavController, meta = (RequiredAssetDataTags = "RowStructure=/Script/UINavigation.InputNameMapping"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = UINavController, meta = (RequiredAssetDataTags = "RowStructure=/Script/UINavigation.InputNameMapping"))
 	UDataTable* KeyboardMouseKeyNameData = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Settings")
@@ -425,6 +425,8 @@ public:
 	void ProcessRebind(const FKeyEvent& KeyEvent);
 	void CancelRebind();
 
+	void RebindEnd();
+	
 	/**
 	*	Verifies if a new input type is being used
 	*
@@ -438,6 +440,8 @@ public:
 	void NotifyMouseInputType();
 
 	void ListenToInputRebind(UUINavInputBox* InputBox);
+
+	bool CanListen();
 
 	bool GetAndConsumeIgnoreSelectRelease();
 
@@ -499,10 +503,10 @@ public:
 	//Get first found Icon associated with the given enhanced input action
 	//Will search the icon table
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = UINavController)
-	FText GetEnhancedInputText(const UInputAction* Action, const EInputAxis Axis = EInputAxis::X, const EAxisType Scale = EAxisType::None, const EInputRestriction InputRestriction = EInputRestriction::None) const;
+	FText GetEnhancedInputText(const UInputAction* Action, const EInputAxis Axis = EInputAxis::X, const EAxisType Scale = EAxisType::None, const EInputRestriction InputRestriction = EInputRestriction::None, int Index = 0) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = UINavController)
-	FText GetKeyText(const FKey Key) const;
+	FText GetKeyText(const FKey Key, int Index = 0) const;
 
 	//Receives the enhanced input action and returns all the keys associated with that action
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = UINavController)

@@ -122,7 +122,6 @@ void UUINavPCComponent::BeginPlay()
 				!IsValid(InputActions->IA_MenuNext) ||
 				!IsValid(InputActions->IA_MenuPrevious))
 			{
-				DISPLAYERROR("Make sure '/UINavigation/Input' is added as an Additional Directory to Cook in your Project!");
 				DISPLAYERROR("Not all Enhanced Menu Inputs have been setup!");
 				return;
 			}
@@ -437,11 +436,13 @@ void UUINavPCComponent::ProcessRebind(const FKeyEvent& KeyEvent)
 
 	if (KeyEvent.GetKey() == EKeys::LeftMouseButton)
 	{
-		bIgnoreSelectRelease = true;
+		bIgnoreSelectRelease = false;
 	}
 
 	ListeningInputBox->UpdateInputKey(KeyEvent.GetKey());
-	ListeningInputBox = nullptr;
+	FTimerHandle DelayTimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(DelayTimerHandle, this, &UUINavPCComponent::RebindEnd, 0.1f, false);
+	// ListeningInputBox = nullptr;
 	PressedNavigationDirections.Reset();
 }
 
@@ -452,6 +453,11 @@ void UUINavPCComponent::CancelRebind()
 		ListeningInputBox->CancelUpdateInputKey(ERevertRebindReason::None);
 		ListeningInputBox = nullptr;
 	}
+}
+
+void UUINavPCComponent::RebindEnd()
+{
+	ListeningInputBox = nullptr;
 }
 
 void UUINavPCComponent::SetActiveWidget(UUINavWidget * NewActiveWidget)
@@ -830,7 +836,7 @@ void UUINavPCComponent::HandleAnalogInputEvent(FSlateApplication& SlateApp, cons
 				{
 					const float CurrentScrollOffset = ParentScrollBox->GetScrollOffset();
 					const float ScrollOffsetOfEnd = ParentScrollBox->GetScrollOffsetOfEnd();
-					const float NewScrollOffset = FMath::Clamp(CurrentScrollOffset + ScrollAmount, 0.0f, ScrollOffsetOfEnd);
+					const float NewScrollOffset = CurrentUINavComponent->ForceScrollOffset >=0 ? CurrentUINavComponent->ForceScrollOffset : FMath::Clamp(CurrentScrollOffset + ScrollAmount, 0.0f, ScrollOffsetOfEnd);
 					
 					ParentScrollBox->SetScrollOffset(NewScrollOffset);
 					if (CurrentScrollOffset != NewScrollOffset)
@@ -862,21 +868,24 @@ void UUINavPCComponent::HandleMouseMoveEvent(FSlateApplication& SlateApp, const 
 			const float MouseMoveThreshold = GetDefault<UUINavSettings>()->MouseMoveRebindThreshold;
 			const FVector2D MovementDelta = MouseEvent.GetCursorDelta();
 
-			if (MovementDelta.Y > MouseMoveThreshold) 
+			if (GetDefault<UUINavSettings>()->UseMouseMoveRebind)
 			{
-				MouseKey = MouseDown;
-			}
-			else if (MovementDelta.Y < -MouseMoveThreshold)
-			{
-				MouseKey = MouseUp;
-			}
-			else if (MovementDelta.X > MouseMoveThreshold)
-			{
-				MouseKey = MouseRight;
-			}
-			else if (MovementDelta.X < -MouseMoveThreshold)
-			{
-				MouseKey = MouseLeft;
+				if (MovementDelta.Y > MouseMoveThreshold) 
+				{
+					MouseKey = MouseDown;
+				}
+				else if (MovementDelta.Y < -MouseMoveThreshold)
+				{
+					MouseKey = MouseUp;
+				}
+				else if (MovementDelta.X > MouseMoveThreshold)
+				{
+					MouseKey = MouseRight;
+				}
+				else if (MovementDelta.X < -MouseMoveThreshold)
+				{
+					MouseKey = MouseLeft;
+				}
 			}
 
 			const FKeyEvent MouseKeyEvent(MouseKey, FModifierKeysState(), MouseEvent.GetUserIndex(), MouseEvent.IsRepeat(), 0, 0);
@@ -1185,12 +1194,12 @@ TSoftObjectPtr<UTexture2D> UUINavPCComponent::GetSoftEnhancedInputIcon(const UIn
 	return GetSoftKeyIcon(GetEnhancedInputKey(Action, Axis, Scale, InputRestriction));
 }
 
-FText UUINavPCComponent::GetEnhancedInputText(const UInputAction* Action, const EInputAxis Axis, const EAxisType Scale, const EInputRestriction InputRestriction) const
+FText UUINavPCComponent::GetEnhancedInputText(const UInputAction* Action, const EInputAxis Axis, const EAxisType Scale, const EInputRestriction InputRestriction, int Index) const
 {
-	return GetKeyText(GetEnhancedInputKey(Action, Axis, Scale, InputRestriction));
+	return GetKeyText(GetEnhancedInputKey(Action, Axis, Scale, InputRestriction), Index);
 }
 
-FText UUINavPCComponent::GetKeyText(const FKey Key) const
+FText UUINavPCComponent::GetKeyText(const FKey Key, int Index) const
 {
 	if (!Key.IsValid()) return FText();
 
@@ -1210,8 +1219,12 @@ FText UUINavPCComponent::GetKeyText(const FKey Key) const
 			Keyname = reinterpret_cast<FInputNameMapping*>(KeyboardMouseKeyNameData->GetRowMap()[Key.GetFName()]);
 		}
 	}
-
-	return Keyname != nullptr ? Keyname->InputText : Key.GetDisplayName();
+	
+	if (Keyname != nullptr && Keyname->InputTexts.Num() > 0 && Index < Keyname->InputTexts.Num())
+	{
+		return Keyname->InputTexts[Index];
+	}
+	return Key.GetDisplayName();
 }
 
 void UUINavPCComponent::GetEnhancedInputKeys(const UInputAction* Action, TArray<FKey>& OutKeys)
@@ -1469,6 +1482,11 @@ void UUINavPCComponent::NotifyMouseInputType()
 void UUINavPCComponent::ListenToInputRebind(UUINavInputBox* InputBox)
 {
 	ListeningInputBox = InputBox;
+}
+
+bool UUINavPCComponent::CanListen()
+{
+	return ListeningInputBox ? false : true;
 }
 
 bool UUINavPCComponent::GetAndConsumeIgnoreSelectRelease()

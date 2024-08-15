@@ -180,6 +180,9 @@ public:
 
 	bool bIgnoreDueToRebind = false;
 
+	UPROPERTY(EditAnywhere, Category = UINavComponent)
+	float ForceScrollOffset = -1.0f;
+
 protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = UINavComponent)

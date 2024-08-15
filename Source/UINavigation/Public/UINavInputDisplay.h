@@ -71,6 +71,9 @@ protected:
 	EInputDisplayType DisplayType = EInputDisplayType::Icon;
 
 	UPROPERTY(EditAnywhere, Category = "InputDisplay")
+	int Index = 0;
+	
+	UPROPERTY(EditAnywhere, Category = "InputDisplay")
 	bool bMatchIconSize = false;
 
 	UPROPERTY(EditAnywhere, Category = "InputDisplay", meta = (editcondition = "!bMatchIconSize"))

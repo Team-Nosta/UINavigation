@@ -13,7 +13,6 @@
 #include "UINavBlueprintFunctionLibrary.h"
 #include "UINavMacros.h"
 #include "UINavSectionsWidget.h"
-#include "UINavSectionButton.h"
 #include "ComponentActions/UINavComponentAction.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
@@ -210,6 +209,8 @@ void UUINavWidget::TraverseHierarchy()
 			ChildUINavWidgets.Add(ChildUINavWidget);
 		}
 	}
+
+	SetupSections();
 }
 
 void UUINavWidget::SetupSections()
@@ -238,7 +239,7 @@ void UUINavWidget::SetupSections()
 		return;
 	}
 
-	uint8 SectionButtonsNum = 0;
+	TArray<const UButton*> SectionButtons;
 	for (UWidget* const ChildWidget : SectionsPanel->GetAllChildren())
 	{
 		if (ChildWidget->IsA<UUINavComponent>())
@@ -249,10 +250,10 @@ void UUINavWidget::SetupSections()
 
 		UButton* SectionButton = nullptr;
 
-		const UUINavSectionButton* const ChildSectionButtonWidget = Cast<UUINavSectionButton>(ChildWidget);
-		if (IsValid(ChildSectionButtonWidget))
+		const UUserWidget* const ChildUserWidget = Cast<UUserWidget>(ChildWidget);
+		if (IsValid(ChildUserWidget))
 		{
-			SectionButton = ChildSectionButtonWidget->SectionButton;
+			//...
 		}
 
 		if (!IsValid(SectionButton))
@@ -265,7 +266,9 @@ void UUINavWidget::SetupSections()
 			continue;
 		}
 
-		switch (++SectionButtonsNum)
+		SectionButtons.Add(SectionButton);
+		const int32 NumSectionsButtons = SectionButtons.Num();
+		switch (NumSectionsButtons)
 		{
 		case 1:
 			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed1);
@@ -318,8 +321,6 @@ void UUINavWidget::SetupSelector()
 void UUINavWidget::UINavSetup()
 {
 	if (UINavPC == nullptr) return;
-
-	SetupSections();
 
 	UUINavWidget* CurrentActiveWidget = UINavPC->GetActiveWidget();
 	const bool bShouldTakeFocus =
@@ -729,8 +730,8 @@ void UUINavWidget::HandleOnNavigation(FNavigationReply& Reply, UUINavWidget* Wid
 	{
 		if (bAllowsSectionInput)
 		{
-			IUINavPCReceiver::Execute_OnPrevious(Widget->UINavPC->GetOwner());
 			Widget->PropagateOnPrevious();
+			IUINavPCReceiver::Execute_OnPrevious(Widget->UINavPC->GetOwner());
 		}
 
 		if (bStopNextPrevious || !bAllowsSectionInput)
@@ -909,7 +910,7 @@ void UUINavWidget::GoToPreviousSection()
 
 void UUINavWidget::GoToSection(const int32 SectionIndex)
 {
-	if (!IsValid(UINavSwitcher) || !IsValid(UINavSwitcher->GetWidgetAtIndex(SectionIndex)) || UINavSwitcher->GetActiveWidgetIndex() == SectionIndex)
+	if (!IsValid(UINavSwitcher) || !IsValid(UINavSwitcher->GetWidgetAtIndex(SectionIndex)))
 	{
 		return;
 	}
@@ -917,6 +918,7 @@ void UUINavWidget::GoToSection(const int32 SectionIndex)
 	const int32 OldIndex = UINavSwitcher->GetActiveWidgetIndex();
 	UINavSwitcher->SetActiveWidgetIndex(SectionIndex);
 	UINavSwitcher->GetActiveWidget()->SetFocus();
+	
 	OnChangedSection(OldIndex, SectionIndex);
 }
 

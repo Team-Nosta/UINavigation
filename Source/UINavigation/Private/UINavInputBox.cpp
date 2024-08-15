@@ -631,7 +631,7 @@ void UUINavInputBox::InputComponentClicked(const int Index)
 	{
 		return;
 	}
-
+	
 	AwaitingIndex = Index;
 
 	InputButtons[Index]->SetText(Container->PressKeyText);
@@ -643,8 +643,11 @@ void UUINavInputBox::InputComponentClicked(const int Index)
 		if (IsValid(InputButtons[Index]->NavText)) InputButtons[Index]->NavText->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		if (IsValid(InputButtons[Index]->NavRichText)) InputButtons[Index]->NavRichText->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	}
-
-	Container->UINavPC->ListenToInputRebind(this);
+	
+	if (Container->UINavPC->CanListen())
+	{
+		Container->UINavPC->ListenToInputRebind(this);
+	}
 }
 
 void UUINavInputBox::GetEnhancedMappingsForAction(const UInputAction* Action, const EInputAxis& Axis, const int Index, TArray<int32>& OutMappingIndices)

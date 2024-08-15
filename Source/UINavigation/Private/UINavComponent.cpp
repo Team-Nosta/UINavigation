@@ -173,9 +173,8 @@ void UUINavComponent::OnButtonClicked()
 	{
 		return;
 	}
-	
 	const bool bWasListeningToRebind = ParentWidget->UINavPC->IsListeningToInputRebind();
-
+	
 	OnNativeClicked.Broadcast();
 	OnClicked.Broadcast();
 
@@ -185,6 +184,7 @@ void UUINavComponent::OnButtonClicked()
 	
 	if (bWasListeningToRebind)
 	{
+		ParentWidget->UINavPC->LastReleasedKey = EKeys::LeftMouseButton;
 		const FKeyEvent ReleasedKeyEvent(ParentWidget->UINavPC->LastReleasedKey, FModifierKeysState(), ParentWidget->UINavPC->LastReleasedKeyUserIndex, false, 0, 0);
 		ParentWidget->UINavPC->ProcessRebind(ReleasedKeyEvent);
 	}

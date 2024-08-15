@@ -73,6 +73,9 @@ public:
 	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Settings")
 	float MouseMoveRebindThreshold = 1.0f;
 
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Settings")
+	bool UseMouseMoveRebind = false;
+
 	// The amount of mouse movement delta that will trigger the input type being changed to mouse
 	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Settings")
 	float MouseInputChangeThreshold = 0.5f;

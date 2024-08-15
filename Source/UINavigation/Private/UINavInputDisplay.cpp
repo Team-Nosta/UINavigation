@@ -125,7 +125,7 @@ void UUINavInputDisplay::UpdateInputVisuals()
 	}
 	if (NewSoftTexture.IsNull() || DisplayType != EInputDisplayType::Icon)
 	{
-		const FText InputRawText = UINavPC->GetEnhancedInputText(InputAction, Axis, Scale, Restriction);
+		const FText InputRawText = UINavPC->GetEnhancedInputText(InputAction, Axis, Scale, Restriction, Index);
 		if (IsValid(InputText))
 		{
 			InputText->SetText(InputRawText);

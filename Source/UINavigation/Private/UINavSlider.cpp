@@ -81,6 +81,12 @@ void UUINavSlider::SetValueClamped(const float Value)
 	Update();
 }
 
+float UUINavSlider::UpdateBoxValueFromSlider(bool IsFloor, bool KeepTwo)
+{
+	UpdateTextFromPercent(GetSliderValue(), true, IsFloor, KeepTwo);
+	return NavSpinBox->GetValue();
+}
+
 float UUINavSlider::GetSliderValue() const
 {
 	return (Slider->GetValue());
@@ -193,13 +199,21 @@ void UUINavSlider::UpdateTextFromValue(const float Value, const bool bUpdateSpin
 	UpdateTextFromPercent(NewValuePercent, bUpdateSpinBox);
 }
 
-void UUINavSlider::UpdateTextFromPercent(const float Percent, const bool bUpdateSpinBox /*= true*/)
+void UUINavSlider::UpdateTextFromPercent(const float Percent, const bool bUpdateSpinBox /*= true*/, const bool IsFloor /*= false*/, const bool KeepTwo /*= false*/)
 {
 	FNumberFormattingOptions FormatOptions = FNumberFormattingOptions();
 	FormatOptions.MaximumFractionalDigits = MaxDecimalDigits;
 	FormatOptions.MinimumFractionalDigits = MinDecimalDigits;
 
-	const float NewValue = MinValue + Percent * Difference;
+	float NewValue = MinValue + Percent * Difference;
+	if (KeepTwo)
+	{
+		NewValue = FMath::Floor(NewValue * 100) / 100;
+	}
+	if (IsFloor)
+	{
+		NewValue = FMath::Floor(NewValue);
+	}
 	FText NewValueText = FText::AsNumber(NewValue, &FormatOptions);
 	if (!bUseComma) NewValueText = FText::FromString(NewValueText.ToString().Replace(TEXT(","), TEXT(".")));
 

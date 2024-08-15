@@ -44,7 +44,7 @@ protected:
 	int IndexFromValue(const float Value);
 
 	void UpdateTextFromValue(const float Value, const bool bUpdateSpinBox = true);
-	void UpdateTextFromPercent(const float Percent, const bool bUpdateSpinBox = true);
+	void UpdateTextFromPercent(const float Percent, const bool bUpdateSpinBox = true, const bool IsFloor = false, const bool KeepTwo = false);
 
 public:
 
@@ -98,7 +98,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = UINavSlider)
 	void SetValueClamped(const float Value);
-
+	
+	UFUNCTION(BlueprintCallable, Category = UINavSlider)
+	float UpdateBoxValueFromSlider(bool IsFloor = false, bool KeepTwo = false);
+	
 	//Get Current Slider value (0 to 1)
 	UFUNCTION(BlueprintPure, BlueprintCallable, Category = UINavSlider)
 	float GetSliderValue() const;

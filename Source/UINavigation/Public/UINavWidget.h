@@ -249,7 +249,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UINavigation Selector")
 	FVector2D SelectorOffset;
 
-
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = UINavWidget, meta = (DisplayName = "Return Sound"))
+	FSlateSound ReturnSlateSound;
+	
 	/*********************************************************************************/
 
 	
@@ -665,4 +667,5 @@ public:
 	void OnPressedComponent(UUINavComponent* Component);
 	void OnReleasedComponent(UUINavComponent* Component);
 
+	void PlayReturnSound();
 };

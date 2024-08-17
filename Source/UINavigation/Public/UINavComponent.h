@@ -106,6 +106,8 @@ public:
 
 	USoundBase* GetOnNavigatedSound() const { return Cast<USoundBase>(NavigatedSlateSound.GetResourceObject()); }
 
+	USoundBase* GetClickSound() const { return Cast<USoundBase>(ClickSlateSound.GetResourceObject()); }
+	
 	void ExecuteComponentActions(const EComponentAction Action);
 
 	UWidgetAnimation* GetComponentAnimation() const { return ComponentAnimation; }
@@ -221,7 +223,10 @@ protected:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = UINavComponent, meta = (DisplayName = "Navigated Sound"))
 	FSlateSound NavigatedSlateSound;
-
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = UINavComponent, meta = (DisplayName = "Click Sound"))
+	FSlateSound ClickSlateSound;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = UINavComponent, meta = (editcondition = "bOverride_Font"))
 	FSlateFontInfo FontOverride;
 

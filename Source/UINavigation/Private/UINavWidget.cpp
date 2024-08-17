@@ -1479,6 +1479,7 @@ void UUINavWidget::ReturnToParent(const bool bRemoveAllParents, const int ZOrder
 			{
 				bReturningToParent = true;
 				RemoveFromParent();
+				PlayReturnSound();
 			}
 		}
 		return;
@@ -1518,6 +1519,7 @@ void UUINavWidget::ReturnToParent(const bool bRemoveAllParents, const int ZOrder
 				bReturningToParent = true;
 				RemoveFromParent();
 				Destruct();
+				PlayReturnSound();
 			}
 			else
 			{
@@ -1539,6 +1541,7 @@ void UUINavWidget::ReturnToParent(const bool bRemoveAllParents, const int ZOrder
 				}
 				bReturningToParent = true;
 				RemoveFromParent();
+				PlayReturnSound();
 			}
 		}
 		else
@@ -1640,7 +1643,7 @@ void UUINavWidget::CallOnNavigate(UUINavComponent* FromComponent, UUINavComponen
 	if (IsValid(ToComponent))
 	{
 		USoundBase* NavigatedSound = ToComponent->GetOnNavigatedSound();
-		if (NavigatedSound != nullptr)
+		if (NavigatedSound != nullptr && IsValid(FromComponent))
 		{
 			PlaySound(NavigatedSound);
 		}
@@ -1917,4 +1920,14 @@ void UUINavWidget::OnReleasedComponent(UUINavComponent* Component)
 	}
 
 	if (Component != CurrentComponent) Component->SetFocus();
+}
+
+void UUINavWidget::PlayReturnSound()
+{
+	// 播放返回音效
+	USoundBase* ReturnSound = Cast<USoundBase>(ReturnSlateSound.GetResourceObject());
+	if (ReturnSound != nullptr)
+	{
+		PlaySound(ReturnSound);
+	}
 }

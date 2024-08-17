@@ -164,6 +164,13 @@ void UUINavComponent::HandleFocusLost()
 
 void UUINavComponent::OnButtonClicked()
 {
+	// 播放点击音效
+	USoundBase* ClickSound = GetClickSound();
+	if (ClickSound != nullptr)
+	{
+		PlaySound(ClickSound);
+	}
+	
 	if (!IsValid(ParentWidget) || !IsValid(ParentWidget->UINavPC))
 	{
 		return;

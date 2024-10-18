@@ -556,6 +556,7 @@ public:
 
 	void PropagateOnHorizCompUpdated(UUINavComponent* Component);
 
+	UFUNCTION(BlueprintCallable, Category = UINavWidget)
 	virtual void NavigatedTo(UUINavComponent* NavigatedToComponent, const bool bNotifyUINavPC = true);
 
 	void CallOnNavigate(UUINavComponent* FromComponent, UUINavComponent* ToComponent);

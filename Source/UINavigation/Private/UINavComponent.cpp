@@ -29,6 +29,14 @@ UUINavComponent::UUINavComponent(const FObjectInitializer& ObjectInitializer)
 
 void UUINavComponent::NativeConstruct()
 {
+	if (!IsValid(NavButton))
+	{
+		Super::NativeConstruct();
+		const FString ErrorMessage = FString::Printf(TEXT("%s doesn't have a NavButton!"), *GetName());
+		DISPLAYERROR(ErrorMessage);
+		return;
+	}
+
 	NavButton->OnClicked.AddUniqueDynamic(this, &UUINavComponent::OnButtonClicked);
 	NavButton->OnPressed.AddUniqueDynamic(this, &UUINavComponent::OnButtonPressed);
 	NavButton->OnReleased.AddUniqueDynamic(this, &UUINavComponent::OnButtonReleased);
@@ -171,7 +179,7 @@ void UUINavComponent::OnButtonClicked()
 		PlaySound(ClickSound);
 	}
 	
-	if (!IsValid(ParentWidget) || !IsValid(ParentWidget->UINavPC))
+	if (!IsValid(ParentWidget) || !IsValid(ParentWidget->UINavPC) || !ParentWidget->UINavPC->IsWidgetActive(ParentWidget) || !NavButton->HasAnyUserFocus())
 	{
 		return;
 	}
@@ -199,7 +207,7 @@ void UUINavComponent::OnButtonClicked()
 
 void UUINavComponent::OnButtonPressed()
 {
-	if (!ParentWidget->UINavPC->IsWidgetActive(ParentWidget))
+	if (!IsValid(ParentWidget) || !IsValid(ParentWidget->UINavPC) || !ParentWidget->UINavPC->IsWidgetActive(ParentWidget) || !NavButton->HasAnyUserFocus())
 	{
 		return;
 	}
@@ -217,7 +225,7 @@ void UUINavComponent::OnButtonPressed()
 
 void UUINavComponent::OnButtonReleased()
 {
-	if (!ParentWidget->UINavPC->IsWidgetActive(ParentWidget))
+	if (!IsValid(ParentWidget) || !IsValid(ParentWidget->UINavPC) || !ParentWidget->UINavPC->IsWidgetActive(ParentWidget) || !NavButton->HasAnyUserFocus())
 	{
 		return;
 	}
@@ -406,36 +414,38 @@ void UUINavComponent::NativePreConstruct()
 
 void UUINavComponent::SwitchButtonStyle(const EButtonStyle NewStyle, const bool bRevertStyle /*= true*/)
 {
-	if (NewStyle == ForcedStyle)
+	if (NewStyle == ForcedStylePair.Key)
 	{
 		return;
 	}
 
 	CurrentStyle = GetStyleFromButtonState();
-	if (NewStyle == CurrentStyle && ForcedStyle == EButtonStyle::None) return;
-
-	const bool bWasForcePressed = ForcedStyle == EButtonStyle::Pressed;
+	if (NewStyle == CurrentStyle && ForcedStylePair.Key == EButtonStyle::None) return;
 
 	if (bRevertStyle)
 	{
 		RevertButtonStyle();
 	}
 
-	SwapStyle(NewStyle, CurrentStyle);
+	if (CurrentStyle == EButtonStyle::Pressed)
+	{
+		return;
+	}
 
+	SwapStyle(NewStyle, CurrentStyle);
 	if (NewStyle != CurrentStyle)
 	{
-		ForcedStyle = NewStyle;
+		ForcedStylePair = { NewStyle, CurrentStyle };
 	}
 }
 
 void UUINavComponent::RevertButtonStyle()
 {
-	if (ForcedStyle == EButtonStyle::None) return;
+	if (ForcedStylePair.Key == EButtonStyle::None) return;
 
-	SwapStyle(ForcedStyle, CurrentStyle);
+	SwapStyle(ForcedStylePair.Key, ForcedStylePair.Value);
 
-	ForcedStyle = EButtonStyle::None;
+	ForcedStylePair = { EButtonStyle::None, EButtonStyle::None };
 }
 
 void UUINavComponent::SwapStyle(EButtonStyle Style1, EButtonStyle Style2)

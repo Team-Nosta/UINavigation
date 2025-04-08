@@ -9,15 +9,18 @@
 #include "UINavMacros.h"
 #include "UINavBlueprintFunctionLibrary.h"
 
-void UUINavOptionBox::NativeConstruct()
+void UUINavOptionBox::NativePreConstruct()
 {
 	Super::BaseConstruct();
 
-	if (!LeftButton->OnClicked.IsBound())
-		LeftButton->OnClicked.AddDynamic(this, &UUINavHorizontalComponent::NavigateLeft);
-	
-	if (!RightButton->OnClicked.IsBound())
-		RightButton->OnClicked.AddDynamic(this, &UUINavHorizontalComponent::NavigateRight);
+	if (!IsDesignTime())
+	{
+		if (!LeftButton->OnClicked.IsBound())
+			LeftButton->OnClicked.AddDynamic(this, &UUINavHorizontalComponent::NavigateLeft);
+
+		if (!RightButton->OnClicked.IsBound())
+			RightButton->OnClicked.AddDynamic(this, &UUINavHorizontalComponent::NavigateRight);
+	}
 }
 
 int UUINavOptionBox::GetMaxOptionIndex() const
@@ -28,19 +31,24 @@ int UUINavOptionBox::GetMaxOptionIndex() const
 	}
 	else
 	{
-		return StringOptions.Num() - 1;
+		return FMath::Max(StringOptions.Num() - 1, 0);
 	}
 }
 
 bool UUINavOptionBox::Update(const bool bNotify /*= true*/)
 {
-	const bool bChangedIndex = Super::Update(bNotify);
+	const bool bChangedIndex = Super::Update(false);
 
 	const FText NewText = bUseNumberRange ?
 		FText::FromString(FString::FromInt(MinRange + OptionIndex * Interval)) :
 		StringOptions.IsValidIndex(OptionIndex) ? StringOptions[OptionIndex] : FText();
 
 	SetText(NewText);
+
+	if (bChangedIndex && bNotify)
+	{
+		NotifyUpdated();
+	}
 
 	return bChangedIndex;
 }

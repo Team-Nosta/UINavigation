@@ -113,7 +113,7 @@ void UUINavBlueprintFunctionLibrary::ResetInputSettings(APlayerController* PC)
 			}
 
 			UUINavSavedInputSettings* SavedInputSettings = GetMutableDefault<UUINavSavedInputSettings>();
-			SavedInputSettings->SavedEnhancedInputMappings.Reset();
+			SavedInputSettings->SavedEnhancedInputMappings = DefaultUINavInputSettings->DefaultEnhancedInputMappings;
 			SavedInputSettings->SaveConfig();
 
 			UUINavPCComponent* UINavPC = PC->FindComponentByClass<UUINavPCComponent>();
@@ -269,6 +269,45 @@ UWidget* UUINavBlueprintFunctionLibrary::GetUniformGridChild(const UWidget* cons
 		if (GridSlot->GetColumn() == Column && GridSlot->GetRow() == Row)
 		{
 			return Child;
+		}
+	}
+
+	return nullptr;
+}
+
+UWidget* UUINavBlueprintFunctionLibrary::FindWidgetOfClassesInWidget(UWidget* Widget, const TArray<TSubclassOf<UWidget>>& WidgetClasses)
+{
+	if (!IsValid(Widget))
+	{
+		return nullptr;
+	}
+
+	for (const TSubclassOf<UWidget>& WidgetClass : WidgetClasses)
+	{
+		if (Widget->IsA(WidgetClass))
+		{
+			return Widget;
+		}
+	}
+
+	const UPanelWidget* const PanelWidget = Cast<UPanelWidget>(Widget);
+	if (!IsValid(PanelWidget))
+	{
+		const UUserWidget* const UserWidget = Cast<UUserWidget>(Widget);
+		if (!IsValid(UserWidget))
+		{
+			return nullptr;
+		}
+
+		return FindWidgetOfClassesInWidget(UserWidget->WidgetTree->RootWidget, WidgetClasses);
+	}
+
+	for (UWidget* ChildWidget : PanelWidget->GetAllChildren())
+	{
+		UWidget* FoundWidget = FindWidgetOfClassesInWidget(ChildWidget, WidgetClasses);
+		if (IsValid(FoundWidget))
+		{
+			return FoundWidget;
 		}
 	}
 

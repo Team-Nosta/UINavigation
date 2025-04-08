@@ -9,15 +9,18 @@
 #include "UINavInputContainer.h"
 #include "UINavMacros.h"
 #include "UINavInputBox.h"
+#include "UINavInputDisplay.h"
 #include "UINavigationConfig.h"
 #include "SwapKeysWidget.h"
 #include "Components/ScrollBox.h"
 #include "GameFramework/InputSettings.h"
+#include "GameFramework/PlayerInput.h"
 #include "Data/AxisType.h"
 #include "Data/InputIconMapping.h"
 #include "Data/InputNameMapping.h"
 #include "Data/PlatformConfigData.h"
 #include "UINavBlueprintFunctionLibrary.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 #include "UINavInputProcessor.h"
 #include "GenericPlatform/GenericPlatformInputDeviceMapper.h"
 #include "Framework/Application/SlateApplication.h"
@@ -35,6 +38,7 @@
 #include "UObject/SoftObjectPtr.h"
 #include "Internationalization/Internationalization.h"
 #include "UINavLocalPlayerSubsystem.h"
+#include "UINavGameViewportClient.h"
 #include "Curves/CurveFloat.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
@@ -62,8 +66,6 @@ UUINavPCComponent::UUINavPCComponent()
 		EKeys::AddKey(FKeyDetails(MouseLeft, NSLOCTEXT("InputKeys", "MouseLeft", "Mouse Left"), FKeyDetails::MouseButton));
 	}
 
-	UINavInputContextRef = GetDefault<UUINavSettings>()->EnhancedInputContext.Get();
-
 	static ConstructorHelpers::FObjectFinderOptional<UCurveFloat> ThumbstickCursorCurveAsset(TEXT("/UINavigation/Data/ThumbstickMoveCurve.ThumbstickMoveCurve"));
 	if (IsValid(ThumbstickCursorCurveAsset.Get()))
 	{
@@ -82,7 +84,13 @@ void UUINavPCComponent::Activate(bool bReset)
 
 	if (!PC->GetClass()->ImplementsInterface(UUINavPCReceiver::StaticClass()))
 	{
+		PC = nullptr;
 		DISPLAYERROR(TEXT("Player Controller doesn't implement UINavPCReceiver interface!"));
+		return;
+	}
+
+	if (!PC->IsLocalController())
+	{
 		return;
 	}
 
@@ -98,7 +106,18 @@ void UUINavPCComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (PC != nullptr && PC->IsLocalPlayerController() && !SharedInputProcessor.IsValid())
+	if (PC == nullptr)
+	{
+		return;
+	}
+
+	if (!PC->IsLocalController())
+	{
+		SetComponentTickEnabled(false);
+		return;
+	}
+
+	if (PC != nullptr && !SharedInputProcessor.IsValid())
 	{
 		UUINavLocalPlayerSubsystem* UINavLocalPlayerSubsystem = ULocalPlayer::GetSubsystem<UUINavLocalPlayerSubsystem>(PC->GetLocalPlayer());
 		if (IsValid(UINavLocalPlayerSubsystem)) UINavLocalPlayerSubsystem->ApplySavedInputContexts();
@@ -112,18 +131,26 @@ void UUINavPCComponent::BeginPlay()
 			const UUINavEnhancedInputActions* const InputActions = UINavSettings->EnhancedInputActions.LoadSynchronous();
 		
 			if (!IsValid(InputContext) ||
-				!IsValid(InputActions) ||
-				!IsValid(InputActions->IA_MenuUp) ||
-				!IsValid(InputActions->IA_MenuDown) ||
-				!IsValid(InputActions->IA_MenuLeft) ||
-				!IsValid(InputActions->IA_MenuRight) ||
-				!IsValid(InputActions->IA_MenuSelect) ||
-				!IsValid(InputActions->IA_MenuReturn) ||
-				!IsValid(InputActions->IA_MenuNext) ||
-				!IsValid(InputActions->IA_MenuPrevious))
+				!IsValid(InputActions))
 			{
-				DISPLAYERROR("Not all Enhanced Menu Inputs have been setup!");
+				#if !WITH_EDITOR
+				DISPLAYERROR("Make sure '/UINavigation/Input' is added as an Additional Directory to Cook in your Project!");
+#endif //WITH_EDITOR
+				DISPLAYERROR("UINav Input Data assets weren't found!");
 				return;
+			}
+			else if (!IsValid(InputActions->IA_MenuUp) ||
+					!IsValid(InputActions->IA_MenuDown) ||
+					!IsValid(InputActions->IA_MenuLeft) ||
+					!IsValid(InputActions->IA_MenuRight) ||
+					!IsValid(InputActions->IA_MenuSelect) ||
+					!IsValid(InputActions->IA_MenuReturn) ||
+					!IsValid(InputActions->IA_MenuNext) ||
+					!IsValid(InputActions->IA_MenuPrevious))
+			{
+#if WITH_EDITOR
+				DISPLAYWARNING("Not all Enhanced Menu Inputs have been setup!");
+#endif //WITH_EDITOR
 			}
 		}
 		
@@ -144,7 +171,7 @@ void UUINavPCComponent::BeginPlay()
 
 void UUINavPCComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (PC != nullptr && PC->IsLocalPlayerController())
+	if (PC != nullptr && PC->IsLocalController())
 	{
 		FSlateApplication::Get().UnregisterInputPreProcessor(SharedInputProcessor);
 	}
@@ -163,30 +190,41 @@ void UUINavPCComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	switch (CountdownPhase)
+	if (bChainNavigation)
 	{
-		case ECountdownPhase::First:
-			TimerCounter += DeltaTime;
-			if (TimerCounter >= InputHeldWaitTime)
-			{
-				NavigateInDirection(CallbackDirection);
-				TimerCounter -= InputHeldWaitTime;
-				CountdownPhase = ECountdownPhase::Looping;
-			}
-			break;
-		case ECountdownPhase::Looping:
-			TimerCounter += DeltaTime;
-			if (TimerCounter >= NavigationChainFrequency)
-			{
-				NavigateInDirection(CallbackDirection);
-				TimerCounter -= NavigationChainFrequency;
-			}
-			break;
+		switch (CountdownPhase)
+		{
+			case ECountdownPhase::First:
+				TimerCounter += DeltaTime;
+				if (TimerCounter >= InputHeldWaitTime)
+				{
+					NavigateInDirection(CallbackDirection);
+					TimerCounter -= InputHeldWaitTime;
+					CountdownPhase = ECountdownPhase::Looping;
+				}
+				break;
+			case ECountdownPhase::Looping:
+				TimerCounter += DeltaTime;
+				if (TimerCounter >= NavigationChainFrequency)
+				{
+					NavigateInDirection(CallbackDirection);
+					TimerCounter -= NavigationChainFrequency;
+				}
+				break;
+		}
 	}
 
 	if (!bReceivedAnalogInput)
 	{
-		ThumbstickDelta = FVector2D::ZeroVector;
+		if (ThumbstickDelta != FVector2D::ZeroVector)
+		{
+			ThumbstickDelta = FVector2D::ZeroVector;
+			IUINavPCReceiver::Execute_OnThumbstickCursorInput(GetOwner(), ThumbstickDelta);
+			if (IsValid(ActiveWidget))
+			{
+				ActiveWidget->PropagateOnThumbstickCursorInput(ThumbstickDelta);
+			}
+		}
 	}
 	else
 	{
@@ -217,6 +255,12 @@ void UUINavPCComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 				);
 				//process the event
 				SlateApp.ProcessMouseMoveEvent(MouseEvent);
+			}
+
+			IUINavPCReceiver::Execute_OnThumbstickCursorInput(GetOwner(), ModifiedDelta);
+			if (IsValid(ActiveWidget))
+			{
+				ActiveWidget->PropagateOnThumbstickCursorInput(ModifiedDelta);
 			}
 		}
 	}
@@ -413,8 +457,7 @@ void UUINavPCComponent::TryResetDefaultInputs()
 
 void UUINavPCComponent::InitPlatformData()
 {
-	const FString PlatformName = UGameplayStatics::GetPlatformName();
-	const FPlatformConfigData* const FoundPlatformData = GetDefault<UUINavSettings>()->PlatformConfigData.Find(PlatformName);
+	const FPlatformConfigData* const FoundPlatformData = GetDefault<UUINavSettings>()->PlatformConfigData.Find(UGameplayStatics::GetPlatformName());
 	if (FoundPlatformData != nullptr)
 	{
 		CurrentPlatformData = *FoundPlatformData;
@@ -462,7 +505,7 @@ void UUINavPCComponent::RebindEnd()
 
 void UUINavPCComponent::SetActiveWidget(UUINavWidget * NewActiveWidget)
 {
-	if (NewActiveWidget == ActiveWidget) return;
+	if (NewActiveWidget == ActiveWidget || !IsValid(PC)) return;
 
 	if (ActiveWidget != nullptr)
 	{
@@ -650,6 +693,18 @@ void UUINavPCComponent::SetShowMouseCursor(const bool bShowMouse)
 	float MousePosY;
 	PC->GetMousePosition(MousePosX, MousePosY);
 	PC->SetMouseLocation(static_cast<int>(MousePosX), static_cast<int>(MousePosY));
+
+#if WITH_EDITOR
+	const UWorld* const World = PC->GetWorld();
+	if (IsValid(World))
+	{
+		const UGameViewportClient* const GameViewportClient = World->GetGameViewport();
+		if (IsValid(GameViewportClient) && !GameViewportClient->IsA<UUINavGameViewportClient>())
+		{
+			DISPLAYERROR(TEXT("GameViewportClient isn't a UINavGameViewportClient, so hiding the mouse cursor won't function properly! Please update the GameViewportClient class in Project Settings."));
+		}
+	}
+#endif //WITH_EDITOR
 }
 
 bool UUINavPCComponent::HidingMouseCursor() const
@@ -694,6 +749,7 @@ void UUINavPCComponent::SetAllowAllMenuInput(const bool bAllowInput)
 void UUINavPCComponent::SetAllowDirectionalInput(const bool bAllowInput)
 {
 	bAllowDirectionalInput = bAllowInput;
+	RefreshNavigationKeys();
 }
 
 void UUINavPCComponent::SetAllowSelectInput(const bool bAllowInput)
@@ -711,6 +767,53 @@ void UUINavPCComponent::SetAllowReturnInput(const bool bAllowInput)
 void UUINavPCComponent::SetAllowSectionInput(const bool bAllowInput)
 {
 	bAllowSectionInput = bAllowInput;
+	RefreshNavigationKeys();
+}
+
+void UUINavPCComponent::SetGamepadInputDataTables(UDataTable* NewKeyIconTable, UDataTable* NewKeyNameTable, const bool bUpdateInputDisplays /*= true*/)
+{
+	CurrentPlatformData.GamepadKeyIconData = NewKeyIconTable;
+	CurrentPlatformData.GamepadKeyNameData = NewKeyNameTable;
+
+	if (bUpdateInputDisplays && CurrentInputType == EInputType::Gamepad)
+	{
+		ForceUpdateAllInputDisplays();
+	}
+}
+
+void UUINavPCComponent::SetKeyboardInputDataTables(UDataTable* NewKeyIconTable, UDataTable* NewKeyNameTable, const bool bUpdateInputDisplays /*= true*/)
+{
+	KeyboardMouseKeyIconData = NewKeyIconTable;
+	KeyboardMouseKeyNameData = NewKeyNameTable;
+
+	if (bUpdateInputDisplays && CurrentInputType != EInputType::Gamepad)
+	{
+		ForceUpdateAllInputDisplays();
+	}
+}
+
+void UUINavPCComponent::InputKey(const FKey& Key, const EInputEvent Event, const float Delta)
+{
+	if (IsValid(PC))
+	{
+		PC->InputKey(FInputKeyParams(Key, Event, Delta));
+	}
+}
+
+void UUINavPCComponent::ForceUpdateAllInputDisplays(const bool bOnlyTopLevel /*= false*/)
+{
+	TArray<UUserWidget*> Widgets;
+	UWidgetBlueprintLibrary::GetAllWidgetsOfClass(this, Widgets, UUINavInputDisplay::StaticClass(), /*bTopLevel*/ bOnlyTopLevel);
+	for (UUserWidget* Widget : Widgets)
+	{
+		UUINavInputDisplay* InputDisplay = Cast<UUINavInputDisplay>(Widget);
+		if (!IsValid(InputDisplay))
+		{
+			continue;
+		}
+
+		InputDisplay->UpdateInputVisuals();
+	}
 }
 
 void UUINavPCComponent::HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -752,6 +855,11 @@ void UUINavPCComponent::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKey
 
 void UUINavPCComponent::HandleAnalogInputEvent(FSlateApplication& SlateApp, const FAnalogInputEvent& InAnalogInputEvent)
 {
+	if (!IsValid(ActiveWidget))
+	{
+		return;
+	}
+
 	if (CurrentInputType != EInputType::Gamepad && FMath::Abs(InAnalogInputEvent.GetAnalogValue()) > GetDefault<UUINavSettings>()->AnalogInputChangeThreshold)
 	{
 		NotifyInputTypeChange(EInputType::Gamepad);
@@ -793,34 +901,36 @@ void UUINavPCComponent::HandleAnalogInputEvent(FSlateApplication& SlateApp, cons
 		return;
 	}
 
-	const float DeltaTime = World->DeltaTimeSeconds;
-
 	const EThumbstickAsMouse ThumbstickAsMouse = UsingThumbstickAsMouse();
-	if (ThumbstickAsMouse != EThumbstickAsMouse::None)
-	{
-		const FKey Key = InAnalogInputEvent.GetKey();
-		if ((ThumbstickAsMouse == EThumbstickAsMouse::LeftThumbstick && (Key == EKeys::Gamepad_LeftX || Key == EKeys::Gamepad_LeftY)) ||
-			(ThumbstickAsMouse == EThumbstickAsMouse::RightThumbstick && (Key == EKeys::Gamepad_RightX || Key == EKeys::Gamepad_RightY)))
-		{
-			if (ThumbstickDelta == FVector2D::ZeroVector)
-			{
-				RefreshNavigationKeys();
-			}
-			bReceivedAnalogInput = true;
+	const FKey AnalogKey = InAnalogInputEvent.GetKey();
+	const bool bConsiderLeftStick = ThumbstickAsMouse == EThumbstickAsMouse::LeftThumbstick && (AnalogKey == EKeys::Gamepad_LeftX || AnalogKey == EKeys::Gamepad_LeftY);
+	const bool bConsiderRightStick = ThumbstickAsMouse == EThumbstickAsMouse::RightThumbstick && (AnalogKey == EKeys::Gamepad_RightX || AnalogKey == EKeys::Gamepad_RightY);
 
-			const bool bIsHorizontal = Key == EKeys::Gamepad_LeftX || Key == EKeys::Gamepad_RightX;
-			const float AnalogValue = InAnalogInputEvent.GetAnalogValue();
-			if (bIsHorizontal) ThumbstickDelta.X = AnalogValue;
-			else ThumbstickDelta.Y = AnalogValue;
+	if (!bConsiderLeftStick && !bConsiderRightStick)
+	{
+		return;
+	}
+
+	const float AnalogValue = InAnalogInputEvent.GetAnalogValue();
+	const bool bIsHorizontal = AnalogKey == EKeys::Gamepad_LeftX || AnalogKey == EKeys::Gamepad_RightX;
+	if (bIsHorizontal) ThumbstickDelta.X = AnalogValue;
+	else ThumbstickDelta.Y = AnalogValue;
+
+	if (bConsiderLeftStick || bConsiderRightStick)
+	{
+		if (ThumbstickDelta == FVector2D::ZeroVector)
+		{
+			RefreshNavigationKeys();
 		}
+		bReceivedAnalogInput = true;
 	}
 
 	if (bScrollWithRightThumbstick &&
 		ThumbstickAsMouse != EThumbstickAsMouse::RightThumbstick &&
-		InAnalogInputEvent.GetKey() == EKeys::Gamepad_RightY &&
-		FMath::Abs(InAnalogInputEvent.GetAnalogValue()) >= RightThumbstickScrollDeadzone)
+		AnalogKey == EKeys::Gamepad_RightY &&
+		FMath::Abs(AnalogValue) >= RightThumbstickScrollDeadzone)
 	{
-		const float ScrollAmount = -InAnalogInputEvent.GetAnalogValue() * RightThumbstickScrollSensitivity * 10.0f * DeltaTime;
+		const float ScrollAmount = -AnalogValue * RightThumbstickScrollSensitivity * 10.0f * World->DeltaTimeSeconds;
 		if (IsValid(ActiveWidget))
 		{
 			const UUINavComponent* const CurrentUINavComponent = ActiveWidget->GetCurrentComponent();
@@ -1289,7 +1399,7 @@ const FKey UUINavPCComponent::GetKeyFromAxis(const FKey& Key, const bool bPositi
 	return bPositive ? AxisKeys->PositiveKey : AxisKeys->NegativeKey;
 }
 
-const FKey UUINavPCComponent::GetAxisFromScaledKey(const FKey& Key, bool& OutbPositive) const
+const FKey UUINavPCComponent::GetAxisFromScaledKey(const FKey& Key, const bool bInclude1DAxis, bool& OutbPositive) const
 {
 	for (const TPair<FKey, FAxis2D_Keys>& AxisKeys : AxisToKeyMap)
 	{
@@ -1305,6 +1415,13 @@ const FKey UUINavPCComponent::GetAxisFromScaledKey(const FKey& Key, bool& OutbPo
 			return AxisKeys.Key;
 		}
 	}
+
+	if (bInclude1DAxis)
+	{
+		return GetAxisFromKey(Key);
+		OutbPositive = true;
+	}
+
 	return FKey();
 }
 
@@ -1448,24 +1565,30 @@ void UUINavPCComponent::VerifyInputTypeChangeByKey(const FKeyEvent& KeyEvent, co
 
 EInputMode UUINavPCComponent::GetInputMode() const
 {
-	if (PC != nullptr)
+	if (IsValid(PC))
 	{
-		UGameViewportClient* GameViewportClient = PC->GetWorld()->GetGameViewport();
+		const UWorld* const World = PC->GetWorld();
+		if (IsValid(World))
+		{
+			UGameViewportClient* GameViewportClient = World->GetGameViewport();
+			if (IsValid(GameViewportClient))
+			{
+				const bool bIgnore = GameViewportClient->IgnoreInput();
+				const EMouseCaptureMode Capt = GameViewportClient->GetMouseCaptureMode();
 
-		const bool bIgnore = GameViewportClient->IgnoreInput();
-		const EMouseCaptureMode Capt = GameViewportClient->GetMouseCaptureMode();
-
-		if (bIgnore == false && Capt == EMouseCaptureMode::CaptureDuringMouseDown)
-		{
-			return EInputMode::GameUI;
-		}
-		else if (bIgnore == true && Capt == EMouseCaptureMode::NoCapture)
-		{
-			return EInputMode::UI;
-		}
-		else
-		{
-			return EInputMode::Game;
+				if (bIgnore == false && Capt == EMouseCaptureMode::CaptureDuringMouseDown)
+				{
+					return EInputMode::GameUI;
+				}
+				else if (bIgnore == true && Capt == EMouseCaptureMode::NoCapture)
+				{
+					return EInputMode::UI;
+				}
+				else
+				{
+					return EInputMode::Game;
+				}
+			}
 		}
 	}
 	return EInputMode::None;
@@ -1520,7 +1643,7 @@ void UUINavPCComponent::NotifyInputTypeChange(const EInputType NewInputType, con
 		ActiveWidget->PropagateOnInputChanged(OldInputType, CurrentInputType);
 	}
 
-	IUINavPCReceiver::Execute_OnInputChanged(GetOwner(), CurrentInputType, NewInputType);
+	IUINavPCReceiver::Execute_OnInputChanged(GetOwner(), OldInputType, CurrentInputType);
 	InputTypeChangedDelegate.Broadcast(CurrentInputType);
 	UpdateInputIconsDelegate.Broadcast();
 }
@@ -1532,16 +1655,47 @@ UEnhancedInputComponent* UUINavPCComponent::GetEnhancedInputComponent() const
 
 UInputMappingContext* UUINavPCComponent::GetUINavInputContext() const
 {
+	const TMap<FString, TObjectPtr<UInputMappingContext>>* const ActiveWidgetOverrides = GetActiveWidgetInputContextOverrides(ActiveWidget);
+	if (ActiveWidgetOverrides != nullptr)
+	{
+		const TObjectPtr<UInputMappingContext>* BaselineInputContextOverride = ActiveWidgetOverrides->Find(TEXT(""));
+		if (BaselineInputContextOverride != nullptr)
+		{
+			return *BaselineInputContextOverride;
+		}
+
+		const TObjectPtr<UInputMappingContext>* PlatformInputContextOverride = ActiveWidgetOverrides->Find(UGameplayStatics::GetPlatformName());
+		if (PlatformInputContextOverride != nullptr)
+		{
+			return *PlatformInputContextOverride;
+		}
+	}
+
 	return CurrentPlatformData.UINavInputContextOverride != nullptr ?
 		CurrentPlatformData.UINavInputContextOverride :
 		GetDefault<UUINavSettings>()->EnhancedInputContext.LoadSynchronous();
 }
 
-void UUINavPCComponent::NavigateInDirection(const EUINavigation InDirection)
+const TMap<FString, TObjectPtr<UInputMappingContext>>* const UUINavPCComponent::GetActiveWidgetInputContextOverrides(const UUINavWidget* const UINavWidget) const
+{
+	if (!IsValid(UINavWidget))
+	{
+		return nullptr;
+	}
+
+	if (!UINavWidget->UINavInputContextOverrides.IsEmpty())
+	{
+		return &UINavWidget->UINavInputContextOverrides;
+	}
+
+	return GetActiveWidgetInputContextOverrides(UINavWidget->OuterUINavWidget);
+}
+
+void UUINavPCComponent::NavigateInDirection(const EUINavigation InDirection, const int32 UserIndex /*= 0*/)
 {
 	AllowDirection = InDirection;
 
-	if (!IsValid(ActiveWidget) || !IsValid(ActiveWidget->GetCurrentComponent()))
+	if (!IsValid(ActiveWidget) || !IsValid(ActiveWidget->GetCurrentComponent()) || ActiveWidget->GetCurrentComponent()->GetCachedWidget() == nullptr)
 	{
 		return;
 	}
@@ -1558,7 +1712,7 @@ void UUINavPCComponent::NavigateInDirection(const EUINavigation InDirection)
 		Reply,
 		nullptr,
 		nullptr,
-		SlateApplication.GetUserIndexForKeyboard());
+		UserIndex);
 }
 
 void UUINavPCComponent::MenuNext()

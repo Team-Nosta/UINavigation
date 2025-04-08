@@ -10,10 +10,8 @@
 #include "UINavBlueprintFunctionLibrary.h"
 #include "TimerManager.h"
 
-void UUINavSlider::NativeConstruct()
+void UUINavSlider::NativePreConstruct()
 {
-	Super::NativeConstruct();
-
 	if (MinValue >= MaxValue)
 	{
 		DISPLAYERROR(TEXT("MaxValue should be greater than MinValue"));
@@ -35,30 +33,44 @@ void UUINavSlider::NativeConstruct()
 		NavSpinBox->SetMaxValue(MaxValue);
 		NavSpinBox->SetClearKeyboardFocusOnCommit(true);
 
-		if (!NavSpinBox->OnValueCommitted.IsBound()) NavSpinBox->OnValueCommitted.AddUniqueDynamic(this, &UUINavSlider::HandleOnSpinBoxValueCommitted);
-		if (!NavSpinBox->OnValueChanged.IsBound()) NavSpinBox->OnValueChanged.AddUniqueDynamic(this, &UUINavSlider::HandleOnSpinBoxValueChanged);
-		if (!NavSpinBox->OnBeginSliderMovement.IsBound()) NavSpinBox->OnBeginSliderMovement.AddUniqueDynamic(this, &UUINavSlider::HandleOnSpinBoxMouseCaptureBegin);
+		if (!IsDesignTime())
+		{
+			if (!NavSpinBox->OnValueCommitted.IsBound()) NavSpinBox->OnValueCommitted.AddUniqueDynamic(this, &UUINavSlider::HandleOnSpinBoxValueCommitted);
+			if (!NavSpinBox->OnValueChanged.IsBound()) NavSpinBox->OnValueChanged.AddUniqueDynamic(this, &UUINavSlider::HandleOnSpinBoxValueChanged);
+			if (!NavSpinBox->OnBeginSliderMovement.IsBound()) NavSpinBox->OnBeginSliderMovement.AddUniqueDynamic(this, &UUINavSlider::HandleOnSpinBoxMouseCaptureBegin);
+		}
 	}
 
-	if (!Slider->OnMouseCaptureBegin.IsBound()) Slider->OnMouseCaptureBegin.AddUniqueDynamic(this, &UUINavSlider::HandleOnSliderMouseCaptureBegin);
-	if (!Slider->OnValueChanged.IsBound()) Slider->OnValueChanged.AddUniqueDynamic(this, &UUINavSlider::HandleOnSliderValueChanged);
-	if (!Slider->OnMouseCaptureEnd.IsBound()) Slider->OnMouseCaptureEnd.AddUniqueDynamic(this, &UUINavSlider::HandleOnSliderMouseCaptureEnd);
+	if (!IsDesignTime())
+	{
+		if (!Slider->OnMouseCaptureBegin.IsBound()) Slider->OnMouseCaptureBegin.AddUniqueDynamic(this, &UUINavSlider::HandleOnSliderMouseCaptureBegin);
+		if (!Slider->OnValueChanged.IsBound()) Slider->OnValueChanged.AddUniqueDynamic(this, &UUINavSlider::HandleOnSliderValueChanged);
+		if (!Slider->OnMouseCaptureEnd.IsBound()) Slider->OnMouseCaptureEnd.AddUniqueDynamic(this, &UUINavSlider::HandleOnSliderMouseCaptureEnd);
+	}
 
-	Difference = MaxValue - MinValue;
+	SanitizeValues();
+
 	Slider->SetStepSize(Interval / Difference);
 
 	HandleDefaultColor = Slider->GetSliderHandleColor();
 	BarDefaultColor = Slider->GetSliderBarColor();
 
 	Update();
+
+	Super::NativePreConstruct();
 }
 
 bool UUINavSlider::Update(const bool bNotify /*= true*/)
 {
-	const bool bChangedIndex = Super::Update(bNotify);
+	const bool bChangedIndex = Super::Update(false);
 
 	Slider->SetValue(static_cast<float>(OptionIndex) / static_cast<float>(GetMaxOptionIndex()));
 	UpdateTextFromPercent(Slider->GetValue());
+
+	if (bChangedIndex && bNotify)
+	{
+		NotifyUpdated();
+	}
 
 	return bChangedIndex;
 }
@@ -176,6 +188,37 @@ void UUINavSlider::HandleOnSpinBoxValueCommitted(float InValue, ETextCommit::Typ
 	}
 }
 
+void UUINavSlider::SetMinValue(const float NewValue, const bool bNotifyUpdate /*= true*/)
+{
+	MinValue = NewValue;
+	if (IsValid(NavSpinBox))
+	{
+		NavSpinBox->SetMinSliderValue(MinValue);
+		NavSpinBox->SetMinValue(MinValue);
+	}
+	SanitizeValues();
+	Update(bNotifyUpdate);
+}
+
+void UUINavSlider::SetMaxValue(const float NewValue, const bool bNotifyUpdate /*= true*/)
+{
+	MaxValue = NewValue;
+	if (IsValid(NavSpinBox))
+	{
+		NavSpinBox->SetMaxSliderValue(MaxValue);
+		NavSpinBox->SetMaxValue(MaxValue);
+	}
+	SanitizeValues();
+	Update(bNotifyUpdate);
+}
+
+void UUINavSlider::SetInterval(const float NewInterval, const bool bNotifyUpdate /*= true*/)
+{
+	Interval = NewInterval;
+	SanitizeValues();
+	Update(bNotifyUpdate);
+}
+
 int UUINavSlider::IndexFromPercent(const float Value)
 {
 	float Div = Value / Slider->GetStepSize();
@@ -223,4 +266,19 @@ void UUINavSlider::UpdateTextFromPercent(const float Percent, const bool bUpdate
 	{
 		NavSpinBox->SetValue(NewValue);
 	}
+}
+
+void UUINavSlider::SanitizeValues()
+{
+	if (Interval == 0.0f)
+	{
+		Interval = 0.1f;
+	}
+
+	if (MaxValue <= MinValue)
+	{
+		MaxValue = MinValue + Interval;
+	}
+
+	Difference = MaxValue - MinValue;
 }

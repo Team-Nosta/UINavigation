@@ -271,9 +271,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = UINavController, meta = (RequiredAssetDataTags = "RowStructure=/Script/UINavigation.InputNameMapping"))
 	UDataTable* KeyboardMouseKeyNameData = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Settings")
-	UInputMappingContext* UINavInputContextRef;
-
 	FPlatformConfigData CurrentPlatformData;
 
 	FKey LastPressedKey;
@@ -387,6 +384,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = UINavController)
 	void SetAllowSectionInput(const bool bAllowInput);
 
+	UFUNCTION(BlueprintCallable, Category = UINavController)
+	void SetGamepadInputDataTables(UDataTable* NewKeyIconTable, UDataTable* NewKeyNameTable, const bool bUpdateInputDisplays = true);
+
+	UFUNCTION(BlueprintCallable, Category = UINavController)
+	void SetKeyboardInputDataTables(UDataTable* NewKeyIconTable, UDataTable* NewKeyNameTable, const bool bUpdateInputDisplays = true);
+
+	UFUNCTION()
+	void InputKey(const FKey& Key, const EInputEvent Event, const float Delta);
+
+	/*
+	*	Fetches all UINavInputDisplays and forces them to update their visuals.
+	* 
+	*	@param bOnlyTopLevel Whether to update only direct children of the viewport.
+	*/
+	UFUNCTION(BlueprintCallable, Category = UINavController)
+	void ForceUpdateAllInputDisplays(const bool bOnlyTopLevel = false);
+
 	void SetIgnoreFocusByNavigation(const bool bIgnore) { bIgnoreFocusByNavigation = bIgnore; }
 	bool IgnoreFocusByNavigation() const { return bIgnoreFocusByNavigation; }
 
@@ -455,7 +469,7 @@ public:
 	const FKey GetKeyFromAxis(const FKey& Key, bool bPositive, const EInputAxis Axis = EInputAxis::X) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = UINavController)
-	const FKey GetAxisFromScaledKey(const FKey& Key, bool& OutbPositive) const;
+	const FKey GetAxisFromScaledKey(const FKey& Key, const bool bInclude1DAxis, bool& OutbPositive) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = UINavController)
 	const FKey GetAxisFromKey(const FKey& Key) const;
@@ -518,6 +532,8 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = UINavController)
 	UInputMappingContext* GetUINavInputContext() const;
 
+	const TMap<FString, TObjectPtr<UInputMappingContext>>* const GetActiveWidgetInputContextOverrides(const UUINavWidget* const UINavWidget) const;
+
 	UFUNCTION(BlueprintCallable, Category = UINavController)
 	void SetActiveWidget(UUINavWidget* NewActiveWidget);
 
@@ -557,8 +573,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = UINavController, meta = (AdvancedDisplay = 2, DeterminesOutputType = "NewWidgetClass"))
 	UUINavWidget* GoToBuiltWidget(UUINavWidget* NewWidget, const bool bRemoveParent, const bool bDestroyParent = false, const int ZOrder = 0);
 
-	UFUNCTION(BlueprintCallable, Category = UINavController)
-	void NavigateInDirection(const EUINavigation Direction);
+	UFUNCTION(BlueprintCallable, Category = UINavController, meta = (AdvancedDisplay = 1))
+	void NavigateInDirection(const EUINavigation Direction, const int32 UserIndex = 0);
 	void MenuNext();
 	void MenuPrevious();
 

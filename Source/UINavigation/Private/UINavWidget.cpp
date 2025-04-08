@@ -24,22 +24,16 @@
 #include "Components/VerticalBox.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ScrollBox.h"
+#include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/ActorComponent.h"
 #include "Components/ListView.h"
 #include "Components/WidgetSwitcher.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/ViewportSplitScreen.h"
+#include "Engine/Console.h"
 #include "Curves/CurveFloat.h"
-
-const TArray<FString> UUINavWidget::AllowedObjectTypesToFocus = {
-		TEXT("SObjectWidget"),
-		TEXT("SButton"),
-		TEXT("SUINavButton"),
-		TEXT("SSpinBox"),
-		TEXT("SEditableText"),
-		TEXT("SMultilineEditableText")
-};
+#include "Kismet/GameplayStatics.h"
 
 UUINavWidget::UUINavWidget(const FObjectInitializer& ObjectInitializer)
 	:Super(ObjectInitializer)
@@ -89,6 +83,7 @@ void UUINavWidget::NativeConstruct()
 
 		if (bShouldDestroyParent)
 		{
+			ParentWidget = OuterParentWidget->ParentWidget;
 			OuterParentWidget->Destruct();
 			OuterParentWidget = nullptr;
 		}
@@ -137,6 +132,8 @@ void UUINavWidget::InitialSetup(const bool bRebuilding)
 
 	TraverseHierarchy();
 
+	SetupSections();
+
 	//If this widget doesn't need to create the selector, skip to setup
 	if (!IsSelectorValid())
 	{
@@ -184,8 +181,12 @@ void UUINavWidget::ConfigureUINavPC()
 	APlayerController* PC = Cast<APlayerController>(GetOwningPlayer());
 	if (PC == nullptr)
 	{
-		DISPLAYERROR("Player Controller is Null!");
-		return;
+		PC = UGameplayStatics::GetPlayerController(this, 0);
+		if (PC == nullptr)
+		{
+			DISPLAYERROR("Player Controller is Null!");
+			return;
+		}
 	}
 	UINavPC = Cast<UUINavPCComponent>(PC->GetComponentByClass(UUINavPCComponent::StaticClass()));
 	if (UINavPC == nullptr)
@@ -226,80 +227,101 @@ void UUINavWidget::SetupSections()
 		return;
 	}
 
-	if (!IsValid(UINavSectionsPanel))
-	{
-		return;
-	}
-
 	UUINavSectionsWidget* SectionsWidget = Cast<UUINavSectionsWidget>(UINavSectionsPanel);
-	UPanelWidget* SectionsPanel = IsValid(SectionsWidget) ? SectionsWidget->SectionButtonsPanel : Cast<UPanelWidget>(UINavSectionsPanel);
-	if (!IsValid(SectionsPanel))
+	UPanelWidget* TargetSectionsPanel = IsValid(SectionsWidget) ? SectionsWidget->SectionButtonsPanel : Cast<UPanelWidget>(UINavSectionsPanel);
+	if (IsValid(UINavSectionsPanel) && !IsValid(TargetSectionsPanel))
 	{
 		DISPLAYERROR("UINavSectionsPanel isn't a PanelWidget child or UINavSectionsWidget!");
 		return;
 	}
 
-	TArray<const UButton*> SectionButtons;
-	for (UWidget* const ChildWidget : SectionsPanel->GetAllChildren())
+	if (SectionButtons.IsEmpty() && IsValid(TargetSectionsPanel))
 	{
-		if (ChildWidget->IsA<UUINavComponent>())
+#if WITH_EDITOR
+		static const TArray<TSubclassOf<UWidget>> ButtonClassArray = { UButton::StaticClass(), UUINavSectionButton::StaticClass(), UUINavComponent::StaticClass() };
+#else
+		static const TArray<TSubclassOf<UWidget>> ButtonClassArray = { UButton::StaticClass(), UUINavSectionButton::StaticClass() };
+#endif
+
+		for (UWidget* const ChildWidget : TargetSectionsPanel->GetAllChildren())
 		{
-			DISPLAYERROR("UINavSectionsPanel has a UINavComponent. It should only have normal Buttons!");
-			return;
+			UWidget* TargetWidget = UUINavBlueprintFunctionLibrary::FindWidgetOfClassesInWidget(ChildWidget, ButtonClassArray);
+
+			if (TargetWidget->IsA<UUINavComponent>())
+			{
+				DISPLAYERROR("UINavSectionsPanel has a UINavComponent. It should only have normal Buttons!");
+				return;
+			}
+
+			UButton* SectionButton = nullptr;
+
+			const UUINavSectionButton* const ChildSectionButtonWidget = Cast<UUINavSectionButton>(TargetWidget);
+			if (IsValid(ChildSectionButtonWidget))
+			{
+				SectionButton = ChildSectionButtonWidget->SectionButton;
+			}
+
+			if (!IsValid(SectionButton))
+			{
+				SectionButton = Cast<UButton>(TargetWidget);
+			}
+
+			if (!IsValid(SectionButton))
+			{
+				continue;
+			}
+
+			SectionButtons.Add(SectionButton);
 		}
+	}
 
-		UButton* SectionButton = nullptr;
-
-		const UUserWidget* const ChildUserWidget = Cast<UUserWidget>(ChildWidget);
-		if (IsValid(ChildUserWidget))
+	for (int i = 0; i < SectionButtons.Num(); ++i)
+	{
+		switch (i)
 		{
-			//...
-		}
-
-		if (!IsValid(SectionButton))
-		{
-			SectionButton = Cast<UButton>(ChildWidget);
-		}
-
-		if (!IsValid(SectionButton))
-		{
-			continue;
-		}
-
-		SectionButtons.Add(SectionButton);
-		const int32 NumSectionsButtons = SectionButtons.Num();
-		switch (NumSectionsButtons)
-		{
+		case 0:
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed1);
+			break;
 		case 1:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed1);
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed2);
 			break;
 		case 2:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed2);
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed3);
 			break;
 		case 3:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed3);
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed4);
 			break;
 		case 4:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed4);
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed5);
 			break;
 		case 5:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed5);
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed6);
 			break;
 		case 6:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed6);
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed7);
 			break;
 		case 7:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed7);
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed8);
 			break;
 		case 8:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed8);
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed9);
 			break;
 		case 9:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed9);
+			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed10);
 			break;
-		case 10:
-			SectionButton->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed10);
-			break;
+		}
+	}
+
+	if (SectionWidgets.IsEmpty())
+	{
+		static const TArray<TSubclassOf<UWidget>> WidgetClassArray = { UUINavWidget::StaticClass(), UUINavComponent::StaticClass() };
+		for (UWidget* const ChildWidget : UINavSwitcher->GetAllChildren())
+		{
+			UWidget* TargetWidget = UUINavBlueprintFunctionLibrary::FindWidgetOfClassesInWidget(ChildWidget, WidgetClassArray);
+			if (IsValid(TargetWidget))
+			{
+				SectionWidgets.Add(TargetWidget);
+			}
 		}
 	}
 }
@@ -329,6 +351,17 @@ void UUINavWidget::UINavSetup()
 		CurrentActiveWidget == ParentWidget ||
 		CurrentActiveWidget->ParentWidget == this ||
 		ReturnedFromWidget != nullptr;
+
+	if (IsValid(TheSelector))
+	{
+		TheSelector->SetVisibility(ESlateVisibility::Hidden);
+	}
+
+	SetPressingReturn(IsNavigationKeyPressed(EUINavigationAction::Back));
+	if (bPressingReturn && !GetDefault<UUINavSettings>()->bReturnOnPress)
+	{
+		bIgnoreFirstReturn = true;
+	}
 
 	if (ReturnedFromWidget != nullptr && IsValid(CurrentComponent))
 	{
@@ -491,12 +524,60 @@ void UUINavWidget::SetSelectedComponent(UUINavComponent* Component)
 
 void UUINavWidget::SetPressingReturn(const bool InbPressingReturn)
 {
-	bPressingReturn = true;
+	bPressingReturn = InbPressingReturn;
 
 	if (OuterUINavWidget != nullptr)
 	{
 		OuterUINavWidget->SetPressingReturn(InbPressingReturn);
 	}
+}
+
+bool UUINavWidget::IsNavigationKeyPressed(const EUINavigation NavigationEvent) const
+{
+	if (!IsValid(UINavPC))
+	{
+		return false;
+	}
+
+	TSharedRef<FUINavigationConfig> NavConfig = StaticCastSharedRef<FUINavigationConfig>(FSlateApplication::Get().GetNavigationConfig());
+	for (const TPair<FKey, EUINavigation> KeyEventRule : NavConfig->KeyEventRules)
+	{
+		if (KeyEventRule.Value != NavigationEvent)
+		{
+			continue;
+		}
+
+		if (UINavPC->GetPC()->IsInputKeyDown(KeyEventRule.Key))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UUINavWidget::IsNavigationKeyPressed(const EUINavigationAction NavigationAction) const
+{
+	if (!IsValid(UINavPC))
+	{
+		return false;
+	}
+
+	TSharedRef<FUINavigationConfig> NavConfig = StaticCastSharedRef<FUINavigationConfig>(FSlateApplication::Get().GetNavigationConfig());
+	for (const TPair<FKey, EUINavigationAction> KeyEventRule : NavConfig->KeyActionRules)
+	{
+		if (KeyEventRule.Value != NavigationAction)
+		{
+			continue;
+		}
+
+		if (UINavPC->GetPC()->IsInputKeyDown(KeyEventRule.Key))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 FReply UUINavWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
@@ -550,6 +631,12 @@ void UUINavWidget::NativeTick(const FGeometry & MyGeometry, float DeltaTime)
 		{
 			HandleSelectorMovement(DeltaTime);
 		}
+	}
+
+	if (bUpdateMousePositionNextFrame && !CurrentComponent->NavButton->GetCachedGeometry().GetLocalSize().IsNearlyZero())
+	{
+		SetMousePositionToButton(CurrentComponent, GetDefault<UUINavSettings>()->MoveMouseToButtonPosition);
+		bUpdateMousePositionNextFrame = false;
 	}
 }
 
@@ -620,12 +707,14 @@ FNavigationReply UUINavWidget::NativeOnNavigation(const FGeometry& MyGeometry, c
 
 void UUINavWidget::HandleOnFocusChanging(UUINavWidget* Widget, UUINavComponent* Component, const FWeakWidgetPath& PreviousFocusPath, const FWidgetPath& NewWidgetPath, const FFocusEvent& InFocusEvent)
 {
+	const UUINavSettings* const UINavSettings = GetDefault<UUINavSettings>();
+
 	if (!NewWidgetPath.IsValid() ||
 		NewWidgetPath.Widgets.Num() == 0 ||
 		Widget->UINavPC->GetInputMode() == EInputMode::Game ||
 		(InFocusEvent.GetCause() == EFocusCause::Mouse &&
 			Widget->UINavPC->GetInputMode() == EInputMode::GameUI &&
-			GetDefault<UUINavSettings>()->bAllowFocusOnViewportInGameAndUI))
+			UINavSettings->bAllowFocusOnViewportInGameAndUI))
 	{
 		return;
 	}
@@ -645,9 +734,20 @@ void UUINavWidget::HandleOnFocusChanging(UUINavWidget* Widget, UUINavComponent* 
 	const bool LastWidgetIsButton = LastWidgetTypeStr == TEXT("SButton");
 	UUserWidget* ParentWidget = LastWidgetIsButton ? UUINavWidget::FindUserWidgetInWidgetPath(NewWidgetPath, NewWidgetPath.GetLastWidget()) : nullptr;
 	if (InFocusEvent.GetCause() == EFocusCause::WindowActivate ||
-		!UUINavWidget::AllowedObjectTypesToFocus.Contains(LastWidgetTypeStr) ||
+		!UINavSettings->AllowedWidgetTypesToFocus.Contains(LastWidgetTypeStr) ||
 		(LastWidgetIsButton && !IsValid(ParentWidget)))
 	{
+		if (const UWorld* const World = Widget->GetWorld())
+		{
+			if (const UGameViewportClient* const ViewportClient = World->GetGameViewport())
+			{
+				if (IsValid(ViewportClient->ViewportConsole) && ViewportClient->ViewportConsole->bCaptureKeyInput)
+				{
+					return;
+				}
+			}
+		}
+
 		if (IsValid(Component))
 		{
 			Component->NavButton->SetFocus();
@@ -867,11 +967,54 @@ void UUINavWidget::HandleSelectorMovement(const float DeltaTime)
 	{
 		MovementCounter = 0.f;
 		bMovingSelector = false;
-		TheSelector->SetRenderTranslation(SelectorDestination);
+		SetSelectorLocation(SelectorDestination);
 		return;
 	}
 
-	TheSelector->SetRenderTranslation(SelectorOrigin + Distance*MoveCurve->GetFloatValue(MovementCounter));
+	SetSelectorLocation(SelectorOrigin + Distance * MoveCurve->GetFloatValue(MovementCounter));
+}
+
+FVector2D UUINavWidget::GetSelectorLocationOffset(const bool bAbsolute /*= true*/)
+{
+	FVector2D Offset = FVector2D::ZeroVector;
+	if (bAbsolute)
+	{
+		const UPanelSlot* const SelectorPanelSlot = Cast<UPanelSlot>(TheSelector->Slot);
+		if (IsValid(SelectorPanelSlot))
+		{
+			const UCanvasPanel* CanvasPanel = Cast<UCanvasPanel>(SelectorPanelSlot->Parent);
+			while (IsValid(CanvasPanel))
+			{
+				if (!IsValid(CanvasPanel->Slot))
+				{
+					break;
+				}
+
+				const UCanvasPanelSlot* const CanvasPanelSlot = Cast<UCanvasPanelSlot>(CanvasPanel->Slot);
+				if (IsValid(CanvasPanelSlot))
+				{
+					const FVector2D LocalSize = CanvasPanel->GetCachedGeometry().GetLocalSize();
+					const FAnchors CanvasAnchors = CanvasPanelSlot->GetAnchors();
+					Offset.X += (LocalSize.X * CanvasAnchors.Minimum.X) / (CanvasAnchors.Maximum.X - CanvasAnchors.Minimum.X);
+					Offset.Y += (LocalSize.Y * CanvasAnchors.Minimum.Y) / (CanvasAnchors.Maximum.Y - CanvasAnchors.Minimum.Y);
+				}
+
+				CanvasPanel = Cast<UCanvasPanel>(CanvasPanel->Slot->Parent);
+			}
+		}
+	}
+
+	return Offset;
+}
+
+FVector2D UUINavWidget::GetSelectorLocation(const bool bAbsolute /*= true*/)
+{
+	return TheSelector->GetRenderTransform().Translation + GetSelectorLocationOffset(bAbsolute);
+}
+
+void UUINavWidget::SetSelectorLocation(const FVector2D& NewLocation, const bool bAbsolute /*= true*/)
+{
+	TheSelector->SetRenderTranslation(NewLocation - GetSelectorLocationOffset(bAbsolute));
 }
 
 void UUINavWidget::GoToNextSection()
@@ -885,6 +1028,11 @@ void UUINavWidget::GoToNextSection()
 	const int32 NumSections = UINavSwitcher->GetChildrenCount();
 	if (ActiveIndex == NumSections - 1)
 	{
+		if (!bWrapAutoSectionNavigation)
+		{
+			return;
+		}
+
 		GoToSection(0);
 	}
 
@@ -902,6 +1050,11 @@ void UUINavWidget::GoToPreviousSection()
 	const int32 NumSections = UINavSwitcher->GetChildrenCount();
 	if (ActiveIndex == 0)
 	{
+		if (!bWrapAutoSectionNavigation)
+		{
+			return;
+		}
+
 		GoToSection(NumSections - 1);
 	}
 
@@ -910,15 +1063,26 @@ void UUINavWidget::GoToPreviousSection()
 
 void UUINavWidget::GoToSection(const int32 SectionIndex)
 {
-	if (!IsValid(UINavSwitcher) || !IsValid(UINavSwitcher->GetWidgetAtIndex(SectionIndex)))
+	if (!IsValid(UINavSwitcher) ||
+		!IsValid(UINavSwitcher->GetWidgetAtIndex(SectionIndex)) ||
+		!SectionWidgets.IsValidIndex(SectionIndex))
 	{
 		return;
 	}
 
+	if (UINavSwitcher->GetActiveWidgetIndex() == SectionIndex)
+	{
+		UINavSwitcher->GetActiveWidget()->SetFocus();
+		return;
+	}
+	
 	const int32 OldIndex = UINavSwitcher->GetActiveWidgetIndex();
 	UINavSwitcher->SetActiveWidgetIndex(SectionIndex);
-	UINavSwitcher->GetActiveWidget()->SetFocus();
-	
+	UWidget* TargetWidget = SectionWidgets[SectionIndex];
+	if (IsValid(TargetWidget))
+	{
+		TargetWidget->SetFocus();
+	}
 	OnChangedSection(OldIndex, SectionIndex);
 }
 
@@ -975,10 +1139,15 @@ void UUINavWidget::OnSectionButtonPressed10()
 void UUINavWidget::UpdateSelectorLocation(UUINavComponent* Component)
 {
 	if (TheSelector == nullptr || !IsValid(FirstComponent)) return;
-	TheSelector->SetRenderTranslation(GetButtonLocation(Component));
+	SetSelectorLocation(GetSelectorLocationForButton(Component));
 }
 
-FVector2D UUINavWidget::GetButtonLocation(UUINavComponent* Component) const
+FVector2D UUINavWidget::GetSelectorLocationForButton(UUINavComponent* Component) const
+{
+	return GetButtonLocation(Component, SelectorPositioning, true) + SelectorOffset;
+}
+
+FVector2D UUINavWidget::GetButtonLocation(UUINavComponent* Component, const ESelectorPosition Offset, const bool bUseViewportPosition) const
 {
 	if (!IsValid(Component))
 	{
@@ -987,42 +1156,47 @@ FVector2D UUINavWidget::GetButtonLocation(UUINavComponent* Component) const
 
 	const FGeometry Geom = Component->NavButton->GetCachedGeometry();
 	const FVector2D LocalSize = Geom.GetLocalSize();
-	FVector2D LocalPosition;
-	switch (SelectorPositioning)
+	FVector2D LocalPosition = FVector2D::ZeroVector;
+	switch (Offset)
 	{
-		case ESelectorPosition::Position_Center:
-			LocalPosition = LocalSize / 2;
-			break;
-		case ESelectorPosition::Position_Top:
-			LocalPosition = FVector2D(LocalSize.X / 2, 0.f);
-			break;
-		case ESelectorPosition::Position_Bottom:
-			LocalPosition = FVector2D(LocalSize.X / 2, LocalSize.Y);
-			break;
-		case ESelectorPosition::Position_Left:
-			LocalPosition = FVector2D(0.f, LocalSize.Y / 2);
-			break;
-		case ESelectorPosition::Position_Right:
-			LocalPosition = FVector2D(LocalSize.X, LocalSize.Y / 2);
-			break;
-		case ESelectorPosition::Position_Top_Right:
-			LocalPosition = FVector2D(LocalSize.X, 0.f);
-			break;
-		case ESelectorPosition::Position_Top_Left:
-			LocalPosition = FVector2D(0.f, 0.f);
-			break;
-		case ESelectorPosition::Position_Bottom_Right:
-			LocalPosition = FVector2D(LocalSize.X, LocalSize.Y);
-			break;
-		case ESelectorPosition::Position_Bottom_Left:
-			LocalPosition = FVector2D(0.f, LocalSize.Y);
-			break;
+	case ESelectorPosition::Position_Center:
+		LocalPosition = LocalSize / 2;
+		break;
+	case ESelectorPosition::Position_Top:
+		LocalPosition = FVector2D(LocalSize.X / 2, 0.f);
+		break;
+	case ESelectorPosition::Position_Bottom:
+		LocalPosition = FVector2D(LocalSize.X / 2, LocalSize.Y);
+		break;
+	case ESelectorPosition::Position_Left:
+		LocalPosition = FVector2D(0.f, LocalSize.Y / 2);
+		break;
+	case ESelectorPosition::Position_Right:
+		LocalPosition = FVector2D(LocalSize.X, LocalSize.Y / 2);
+		break;
+	case ESelectorPosition::Position_Top_Right:
+		LocalPosition = FVector2D(LocalSize.X, 0.f);
+		break;
+	case ESelectorPosition::Position_Top_Left:
+		LocalPosition = FVector2D(0.f, 0.f);
+		break;
+	case ESelectorPosition::Position_Bottom_Right:
+		LocalPosition = FVector2D(LocalSize.X, LocalSize.Y);
+		break;
+	case ESelectorPosition::Position_Bottom_Left:
+		LocalPosition = FVector2D(0.f, LocalSize.Y);
+		break;
 	}
-	
+
 	FVector2D PixelPos, ViewportPos;
 	USlateBlueprintLibrary::LocalToViewport(GetWorld(), Geom, LocalPosition, PixelPos, ViewportPos);
-	ViewportPos += SelectorOffset;
-	return ViewportPos;
+	return bUseViewportPosition ? ViewportPos : PixelPos;
+}
+
+void UUINavWidget::SetMousePositionToButton(UUINavComponent* Component, const ESelectorPosition MouseRelativePosition)
+{
+	const FVector2D ButtonLocation = GetButtonLocation(Component, MouseRelativePosition, false) + GetDefault<UUINavSettings>()->MoveMouseToButtonOffset;
+	UINavPC->GetPC()->SetMouseLocation(static_cast<int>(ButtonLocation.X), static_cast<int>(ButtonLocation.Y));
 }
 
 void UUINavWidget::ExecuteAnimations(UUINavComponent* FromComponent, UUINavComponent* ToComponent, const bool bHadNavigation, const bool bFinishInstantly /*= false*/)
@@ -1205,8 +1379,8 @@ void UUINavWidget::BeginSelectorMovement(UUINavComponent* FromComponent, UUINavC
 {
 	if (MoveCurve == nullptr) return;
 
-	SelectorOrigin = (bMovingSelector || !IsValid(FromComponent)) ? TheSelector->GetRenderTransform().Translation : GetButtonLocation(FromComponent);
-	SelectorDestination = GetButtonLocation(ToComponent);
+	SelectorOrigin = (bMovingSelector || !IsValid(FromComponent)) ? GetSelectorLocation() : GetSelectorLocationForButton(FromComponent);
+	SelectorDestination = GetSelectorLocationForButton(ToComponent);
 	Distance = SelectorDestination - SelectorOrigin;
 
 	float MinTime, MaxTime;
@@ -1310,6 +1484,20 @@ void UUINavWidget::PropagateOnInputChanged(const EInputType From, const EInputTy
 	if (IsValid(OuterUINavWidget) && !OuterUINavWidget->bMaintainNavigationForChild)
 	{
 		OuterUINavWidget->PropagateOnInputChanged(From, To);
+	}
+}
+
+void UUINavWidget::OnThumbstickCursorInput_Implementation(const FVector2D& ThumbstickDelta)
+{
+
+}
+
+void UUINavWidget::PropagateOnThumbstickCursorInput(const FVector2D& ThumbstickDelta)
+{
+	OnThumbstickCursorInput(ThumbstickDelta);
+	if (IsValid(OuterUINavWidget) && !OuterUINavWidget->bMaintainNavigationForChild)
+	{
+		OuterUINavWidget->PropagateOnThumbstickCursorInput(ThumbstickDelta);
 	}
 }
 
@@ -1451,6 +1639,12 @@ UUINavWidget * UUINavWidget::GoToBuiltWidget(UUINavWidget* NewWidget, const bool
 			NewWidget->SetKeyboardFocus();
 		}
 	}
+
+	if (NewWidget->GetMostOuterUINavWidget() == GetMostOuterUINavWidget())
+	{
+		DISPLAYERROR("Calling GoToBuildWidget on a nested widget. You should call SetFocus instead!");
+	}
+
 	CleanSetup();
 	
 	SelectCount = 0;
@@ -1535,7 +1729,6 @@ void UUINavWidget::ReturnToParent(const bool bRemoveAllParents, const int ZOrder
 				}
 				else
 				{
-					UUINavWidget* ParentOuter = ParentWidget->GetMostOuterUINavWidget();
 					ParentWidget->ReturnedFromWidget = this;
 					ParentWidget->ReconfigureSetup();
 				}
@@ -1613,7 +1806,7 @@ void UUINavWidget::NavigatedTo(UUINavComponent* NavigatedToComponent, const bool
 		RevertAnimation(CurrentComponent);
 	}
 
-	if (!bForcingNavigation)
+	if (!bForcingNavigation && GetDefault<UUINavSettings>()->bForceNavigation)
 	{
 		bForcingNavigation = true;
 	}
@@ -1625,6 +1818,12 @@ void UUINavWidget::NavigatedTo(UUINavComponent* NavigatedToComponent, const bool
 	if (bHoverRestoredNavigation)
 	{
 		bHoverRestoredNavigation = false;
+	}
+
+	const ESelectorPosition MouseRelativePosition = GetDefault<UUINavSettings>()->MoveMouseToButtonPosition;
+	if (MouseRelativePosition != ESelectorPosition::None && UINavPC->GetCurrentInputType() != EInputType::Mouse)
+	{
+		bUpdateMousePositionNextFrame = true;
 	}
 }
 
@@ -1643,7 +1842,7 @@ void UUINavWidget::CallOnNavigate(UUINavComponent* FromComponent, UUINavComponen
 	if (IsValid(ToComponent))
 	{
 		USoundBase* NavigatedSound = ToComponent->GetOnNavigatedSound();
-		if (NavigatedSound != nullptr && IsValid(FromComponent))
+		if (NavigatedSound != nullptr && bForcingNavigation)
 		{
 			PlaySound(NavigatedSound);
 		}
@@ -1670,8 +1869,9 @@ void UUINavWidget::StoppedSelect()
 
 void UUINavWidget::StartedReturn()
 {
+	const bool bWasPressingReturn = bPressingReturn;
 	SetPressingReturn(true);
-	if (GetDefault<UUINavSettings>()->bReturnOnPress)
+	if (GetDefault<UUINavSettings>()->bReturnOnPress && !bWasPressingReturn)
 	{
 		ExecuteReturn(/*bPress*/ true);
 	}
@@ -1681,7 +1881,14 @@ void UUINavWidget::StoppedReturn()
 {
 	if (!GetDefault<UUINavSettings>()->bReturnOnPress)
 	{
-		ExecuteReturn(/*bPress*/ false);
+		if (bIgnoreFirstReturn)
+		{
+			bIgnoreFirstReturn = false;
+		}
+		else
+		{
+			ExecuteReturn(/*bPress*/ false);
+		}
 	}
 
 	SetPressingReturn(false);
@@ -1705,7 +1912,7 @@ void UUINavWidget::ExecuteReturn(const bool bPress)
 			IUINavPCReceiver::Execute_OnReturn(UINavPC->GetOwner());
 		}
 	}
-	else if (!bPress && bPressingReturn)
+	else if (bPress || bPressingReturn)
 	{
 		OnReturn();
 		IUINavPCReceiver::Execute_OnReturn(UINavPC->GetOwner());
@@ -1720,7 +1927,7 @@ bool UUINavWidget::TryConsumeNavigation()
 		return true;
 	}
 
-	return IsValid(SelectedComponent);
+	return IsValid(SelectedComponent) && !GetDefault<UUINavSettings>()->bAllowNavigationWhilePressing;
 }
 
 bool UUINavWidget::IsBeingRemoved() const
@@ -1735,13 +1942,13 @@ bool UUINavWidget::IsBeingRemoved() const
 
 UUINavWidget* UUINavWidget::GetMostOuterUINavWidget()
 {
-	UUINavWidget* MostOUter = this;
-	while (MostOUter->OuterUINavWidget != nullptr)
+	UUINavWidget* MostOuter = this;
+	while (MostOuter->OuterUINavWidget != nullptr)
 	{
-		MostOUter = MostOUter->OuterUINavWidget;
+		MostOuter = MostOuter->OuterUINavWidget;
 	}
 
-	return MostOUter;
+	return MostOuter;
 }
 
 UUINavWidget* UUINavWidget::GetChildUINavWidget(const int ChildIndex) const
@@ -1812,12 +2019,18 @@ void UUINavWidget::RemovedComponent(UUINavComponent* Component)
 
 bool UUINavWidget::IsSelectorValid()
 {
-	return TheSelector != nullptr && TheSelector->GetIsEnabled() && bShowSelector;
+	return TheSelector != nullptr && TheSelector->GetIsEnabled();
 }
 
 void UUINavWidget::OnHoveredComponent(UUINavComponent* Component)
 {
-	if (!IsValid(Component) || UINavPC == nullptr || (UINavPC->HidingMouseCursor() && !UINavPC->OverrideConsiderHover())) return;
+	if (!IsValid(Component) || UINavPC == nullptr) return;
+
+	if (UINavPC->HidingMouseCursor() && !UINavPC->OverrideConsiderHover() && GetDefault<UUINavSettings>()->MoveMouseToButtonPosition == ESelectorPosition::None)
+	{
+		Component->SwitchButtonStyle(EButtonStyle::Normal);
+		return;
+	}
 
 	UINavPC->CancelRebind();
 
@@ -1839,6 +2052,12 @@ void UUINavWidget::OnHoveredComponent(UUINavComponent* Component)
 		else
 		{
 			UpdateNavigationVisuals(CurrentComponent, false, true);
+
+			USoundBase* NavigatedSound = Component->GetOnNavigatedSound();
+			if (NavigatedSound != nullptr && bForcingNavigation)
+			{
+				PlaySound(NavigatedSound);
+			}
 		}
 	}
 
@@ -1855,6 +2074,11 @@ void UUINavWidget::OnUnhoveredComponent(UUINavComponent* Component)
 	if (IgnoreHoverComponent == nullptr || IgnoreHoverComponent != Component)
 	{
 		SetHoveredComponent(nullptr);
+	}
+
+	if (Component == SelectedComponent)
+	{
+		SetSelectedComponent(nullptr);
 	}
 
 	if (!GetDefault<UUINavSettings>()->bForceNavigation)
@@ -1911,6 +2135,8 @@ void UUINavWidget::OnReleasedComponent(UUINavComponent* Component)
 		{
 			SetSelectedComponent(nullptr);
 
+			if (Component != CurrentComponent && GetDefault<UUINavSettings>()->bSetFocusOnRelease) Component->SetFocus();
+
 			if (bIsSelectedButton)
 			{
 				PropagateOnSelect(Component);
@@ -1918,8 +2144,6 @@ void UUINavWidget::OnReleasedComponent(UUINavComponent* Component)
 			PropagateOnStopSelect(Component);
 		}
 	}
-
-	if (Component != CurrentComponent) Component->SetFocus();
 }
 
 void UUINavWidget::PlayReturnSound()

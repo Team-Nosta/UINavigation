@@ -40,11 +40,28 @@ protected:
 	UFUNCTION()
 	void HandleOnSpinBoxValueCommitted(const float InValue, const ETextCommit::Type CommitMethod);
 
+	UFUNCTION(BlueprintCallable, Category = UINavSlider)
+	void SetMinValue(const float NewValue, const bool bNotifyUpdate = true);
+
+	UFUNCTION(BlueprintCallable, Category = UINavSlider)
+	void SetMaxValue(const float NewValue, const bool bNotifyUpdate = true);
+
+	UFUNCTION(BlueprintCallable, Category = UINavSlider)
+	void SetInterval(const float NewInterval, const bool bNotifyUpdate = true);
+
+	UFUNCTION(BlueprintCallable, Category = UINavSlider)
+	void SetMinDecimalDigits(const int DecimalDigits) { MinDecimalDigits = DecimalDigits;  Update(false); }
+
+	UFUNCTION(BlueprintCallable, Category = UINavSlider)
+	void SetMaxDecimalDigits(const int DecimalDigits) { MaxDecimalDigits = DecimalDigits;  Update(false); }
+
 	int IndexFromPercent(const float Value);
 	int IndexFromValue(const float Value);
 
 	void UpdateTextFromValue(const float Value, const bool bUpdateSpinBox = true);
 	void UpdateTextFromPercent(const float Percent, const bool bUpdateSpinBox = true, const bool IsFloor = false, const bool KeepTwo = false);
+
+	void SanitizeValues();
 
 public:
 
@@ -80,7 +97,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = UINavSlider)
 	FLinearColor BarHoverColor = FColor::Blue;
 
-	virtual void NativeConstruct() override;
+	virtual void NativePreConstruct() override;
 
 	virtual bool Update(const bool bNotify = true) override;
 

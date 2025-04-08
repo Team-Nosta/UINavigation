@@ -22,7 +22,10 @@ class UPromptDataBase;
 class UScrollBox;
 class UInputMappingContext;
 class UWidgetSwitcher;
+class UButton;
 enum class EButtonStyle : uint8;
+enum class EUINavigation : uint8;
+enum class EUINavigationAction : uint8;
 
 /**
 * This class contains the logic for UserWidget navigation
@@ -36,6 +39,7 @@ protected:
 
 	bool bMovingSelector = false;
 	bool bBeingRemoved = false;
+	bool bUpdateMousePositionNextFrame = false;
 		
 	UPROPERTY()
 	UUINavComponent* UpdateSelectorPrevComponent = nullptr;
@@ -48,6 +52,7 @@ protected:
 	bool bReturningToParent = false;
 
 	bool bPressingReturn = false;
+	bool bIgnoreFirstReturn = false;
 
 	bool bDestroying = false;
 	bool bHasNavigation = false;
@@ -82,7 +87,8 @@ protected:
 
 	TArray<int> UINavWidgetPath;
 
-	static const TArray<FString> AllowedObjectTypesToFocus;
+	TArray<UButton*> SectionButtons;
+	TArray<UWidget*> SectionWidgets;
 
 	bool bUsingSplitScreen = false;
 
@@ -114,10 +120,18 @@ protected:
 	/**
 	*	Returns the position of the UINavButton with the specified index
 	*/
-	FVector2D GetButtonLocation(UUINavComponent* Component) const;
+	FVector2D GetSelectorLocationForButton(UUINavComponent* Component) const;
+
+	FVector2D GetButtonLocation(UUINavComponent* Component, const ESelectorPosition Offset, const bool bUseViewportPosition) const;
+
+	void SetMousePositionToButton(UUINavComponent* Component, const ESelectorPosition MouseRelativePosition);
 
 	void BeginSelectorMovement(UUINavComponent* FromComponent, UUINavComponent* ToComponent);
 	void HandleSelectorMovement(const float DeltaTime);
+
+	FVector2D GetSelectorLocationOffset(const bool bAbsolute = true);
+	FVector2D GetSelectorLocation(const bool bAbsolute = true);
+	void SetSelectorLocation(const FVector2D& NewLocation, const bool bAbsolute = true);
 
 	UFUNCTION(BlueprintCallable, Category = UINavWidget)
 	void GoToNextSection();
@@ -216,6 +230,17 @@ public:
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = UINavWidget)
 	bool bClearNavigationStateWhenChild = true;
+
+	//If set to true, this widget will go from the first section to the last and vice-versa when using auto section switching.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = UINavWidget)
+	bool bWrapAutoSectionNavigation = true;
+
+	/*
+	* Input Context to be used to replace the default one. for each platform, in this specific widget (assuming a child widget doesn't override that)
+	* The Map's Key (String) should be the name of the platform you want to override. Leave blank if this applies to all platforms.
+	*/
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = UINavWidget)
+	TMap<FString, TObjectPtr<UInputMappingContext>> UINavInputContextOverrides;
 
 	/*
 	* Input Contexts to be applied when this widget becomes active (and to be removed when it becomes inactive)
@@ -348,6 +373,9 @@ public:
 	void SetSelectedComponent(UUINavComponent* Component);
 
 	void SetPressingReturn(const bool InbPressingReturn);
+
+	bool IsNavigationKeyPressed(const EUINavigation NavigationEvent) const;
+	bool IsNavigationKeyPressed(const EUINavigationAction NavigationAction) const;
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, BlueprintPure, Category = UINavWidget)
 	UScrollBox* GetScrollBoxToFocus();
@@ -507,6 +535,16 @@ public:
 	virtual void OnInputChanged_Implementation(const EInputType From, const EInputType To);
 
 	void PropagateOnInputChanged(const EInputType From, const EInputType To);
+
+	/**
+	*	Called when the gamepad's thumbstick moves
+	*/
+	UFUNCTION(BlueprintNativeEvent, Category = UINavController)
+	void OnThumbstickCursorInput(const FVector2D& ThumbstickDelta);
+
+	virtual void OnThumbstickCursorInput_Implementation(const FVector2D& ThumbstickDelta);
+
+	void PropagateOnThumbstickCursorInput(const FVector2D& ThumbstickDelta);
 
 	/**
 	*	Called before this widget is setup for UINav logic

@@ -50,8 +50,6 @@ void UUINavSlider::NativePreConstruct()
 
 	SanitizeValues();
 
-	Slider->SetStepSize(Interval / Difference);
-
 	HandleDefaultColor = Slider->GetSliderHandleColor();
 	BarDefaultColor = Slider->GetSliderBarColor();
 
@@ -281,4 +279,5 @@ void UUINavSlider::SanitizeValues()
 	}
 
 	Difference = MaxValue - MinValue;
+	Slider->SetStepSize(Interval / Difference);
 }

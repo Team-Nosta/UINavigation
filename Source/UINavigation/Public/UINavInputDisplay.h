@@ -56,6 +56,12 @@ public:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "InputDisplay")
 	URichTextBlock* InputRichText = nullptr;
 
+	/**
+	 * 如果单独配置了显示文本，则会屏蔽文本映射表
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "InputDisplay")
+	FText TextOverride;
+
 protected:
 
 	UPROPERTY(EditAnywhere, Category = "InputDisplay")

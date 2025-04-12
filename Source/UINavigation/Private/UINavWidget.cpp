@@ -12,6 +12,7 @@
 #include "UINavWidgetComponent.h"
 #include "UINavBlueprintFunctionLibrary.h"
 #include "UINavMacros.h"
+#include "UINavSectionButton.h"
 #include "UINavSectionsWidget.h"
 #include "ComponentActions/UINavComponentAction.h"
 #include "Blueprint/UserWidget.h"

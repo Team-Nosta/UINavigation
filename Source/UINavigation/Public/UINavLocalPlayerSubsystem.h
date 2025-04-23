@@ -19,6 +19,7 @@ class UINAVIGATION_API UUINavLocalPlayerSubsystem : public ULocalPlayerSubsystem
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
+	UFUNCTION(BlueprintCallable, Category = "UINavLocalPlayerSubsystem")
 	void SaveInputContextState(UInputMappingContext* InputContext);
 	
 	void ApplySavedInputContexts();

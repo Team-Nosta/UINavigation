@@ -276,40 +276,43 @@ void UUINavWidget::SetupSections()
 		}
 	}
 
-	for (int i = 0; i < SectionButtons.Num(); ++i)
+	if (bBindClickEventForSectionsButtons)
 	{
-		switch (i)
+		for (int i = 0; i < SectionButtons.Num(); ++i)
 		{
-		case 0:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed1);
-			break;
-		case 1:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed2);
-			break;
-		case 2:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed3);
-			break;
-		case 3:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed4);
-			break;
-		case 4:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed5);
-			break;
-		case 5:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed6);
-			break;
-		case 6:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed7);
-			break;
-		case 7:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed8);
-			break;
-		case 8:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed9);
-			break;
-		case 9:
-			SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed10);
-			break;
+			switch (i)
+			{
+			case 0:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed1);
+				break;
+			case 1:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed2);
+				break;
+			case 2:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed3);
+				break;
+			case 3:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed4);
+				break;
+			case 4:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed5);
+				break;
+			case 5:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed6);
+				break;
+			case 6:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed7);
+				break;
+			case 7:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed8);
+				break;
+			case 8:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed9);
+				break;
+			case 9:
+				SectionButtons[i]->OnClicked.AddUniqueDynamic(this, &UUINavWidget::OnSectionButtonPressed10);
+				break;
+			}
 		}
 	}
 

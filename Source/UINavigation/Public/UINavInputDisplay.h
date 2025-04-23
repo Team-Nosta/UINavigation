@@ -41,6 +41,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "InputDisplay")
 	void SetIconSize(const FVector2D& NewSize);
 
+	UFUNCTION(BlueprintCallable, Category = "InputDisplay")
+	EInputDisplayType GetDisplayType() const {return DisplayType;};
+
 	// Locks to a specific input type. If set to None, it is automatically detected
 	UPROPERTY(EditAnywhere, Category="InputDisplay")
 	EInputRestriction InputTypeRestriction = EInputRestriction::None;

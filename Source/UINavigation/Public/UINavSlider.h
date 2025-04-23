@@ -82,6 +82,9 @@ public:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = UINavSlider)
 	bool bUseComma = false;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = UINavSlider)
+	bool bUseGrouping = false;
 
 	float Difference = 0.0f;
 

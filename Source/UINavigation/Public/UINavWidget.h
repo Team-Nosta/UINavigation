@@ -276,6 +276,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = UINavWidget, meta = (DisplayName = "Return Sound"))
 	FSlateSound ReturnSlateSound;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = UINavWidget)
+	bool bBindClickEventForSectionsButtons = true;
 	
 	/*********************************************************************************/
 

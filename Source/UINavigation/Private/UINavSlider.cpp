@@ -245,6 +245,7 @@ void UUINavSlider::UpdateTextFromPercent(const float Percent, const bool bUpdate
 	FNumberFormattingOptions FormatOptions = FNumberFormattingOptions();
 	FormatOptions.MaximumFractionalDigits = MaxDecimalDigits;
 	FormatOptions.MinimumFractionalDigits = MinDecimalDigits;
+	FormatOptions.UseGrouping = bUseComma;
 
 	float NewValue = MinValue + Percent * Difference;
 	if (KeepTwo)

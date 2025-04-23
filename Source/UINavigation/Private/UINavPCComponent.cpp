@@ -540,6 +540,7 @@ void UUINavPCComponent::SetActiveWidget(UUINavWidget * NewActiveWidget)
 	const UUINavWidget* const CommonParent = GetFirstCommonParent(ActiveWidget, OldActiveWidget);
 	RemoveInputContextFromUINavWidget(OldActiveWidget, CommonParent);
 	AddInputContextFromUINavWidget(ActiveWidget, CommonParent);
+	UpdateInputIconsDelegate.Broadcast();
 	
 	IUINavPCReceiver::Execute_OnActiveWidgetChanged(GetOwner(), OldActiveWidget, ActiveWidget);
 	

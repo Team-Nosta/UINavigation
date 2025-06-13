@@ -4,6 +4,7 @@
 #include "UINavWidget.h"
 #include "UINavPCComponent.h"
 #include "UINavButtonBase.h"
+#include "UINavWidgetComponent.h"
 #include "UINavBlueprintFunctionLibrary.h"
 #include "Components/OverlaySlot.h"
 #include "Components/TextBlock.h"
@@ -65,11 +66,22 @@ void UUINavComponent::NativeConstruct()
 			ParentWidget->SetFirstComponent(this);
 			if (ParentWidget->bCompletedSetup)
 			{
-				SetFocus();
+				ParentWidget->SetFocusOnComponent(this);
 			}
 		}
 
 		ParentScrollBox = Cast<UScrollBox>(UUINavBlueprintFunctionLibrary::GetParentPanelWidget(this, UScrollBox::StaticClass()));
+	}
+	else
+	{
+		if (!IsValid(ParentWidget->GetFirstComponent()) && CanBeNavigated())
+		{
+			ParentWidget->SetFirstComponent(this);
+			if (ParentWidget->bCompletedSetup)
+			{
+				ParentWidget->SetFocusOnComponent(this);
+			}
+		}
 	}
 
 	SetFocusable(IsFocusable() && GetIsEnabled());
@@ -96,6 +108,27 @@ void UUINavComponent::SetFocusable(const bool bNewIsFocusable)
 	if (IsValid(NavButtonBase))
 	{
 		NavButtonBase->SetIsFocusable(IsFocusable());
+	}
+	else if (!bNewIsFocusable)
+	{
+		DISPLAYERROR("Trying to disable focus on a UI Nav Component whose NavButton isn't of class UINavButtonBase. Please update it accordingly!");
+	}
+}
+
+void UUINavComponent::SetIsEnabled(bool bInIsEnabled)
+{
+	if (!bInIsEnabled)
+	{
+		bWasFocusableWhenDisabled = IsFocusable();
+	}
+	
+	Super::SetIsEnabled(bInIsEnabled);
+	
+	SetFocusable(bInIsEnabled && bWasFocusableWhenDisabled);
+
+	if (bInIsEnabled)
+	{
+		bWasFocusableWhenDisabled = true;
 	}
 }
 
@@ -181,7 +214,10 @@ void UUINavComponent::OnButtonClicked()
 	
 	if (!IsValid(ParentWidget) || !IsValid(ParentWidget->UINavPC) || !ParentWidget->UINavPC->IsWidgetActive(ParentWidget) || !NavButton->HasAnyUserFocus())
 	{
-		return;
+		if (ParentWidget->WidgetComp == nullptr || ParentWidget->WidgetComp->bTakeFocus)
+		{
+			return;
+		}
 	}
 
 	if (!ParentWidget->UINavPC->IsWidgetActive(ParentWidget))
@@ -209,7 +245,10 @@ void UUINavComponent::OnButtonPressed()
 {
 	if (!IsValid(ParentWidget) || !IsValid(ParentWidget->UINavPC) || !ParentWidget->UINavPC->IsWidgetActive(ParentWidget) || !NavButton->HasAnyUserFocus())
 	{
-		return;
+		if (ParentWidget->WidgetComp == nullptr || ParentWidget->WidgetComp->bTakeFocus)
+		{
+			return;
+		}
 	}
 
 	OnNativePressed.Broadcast();
@@ -227,7 +266,10 @@ void UUINavComponent::OnButtonReleased()
 {
 	if (!IsValid(ParentWidget) || !IsValid(ParentWidget->UINavPC) || !ParentWidget->UINavPC->IsWidgetActive(ParentWidget) || !NavButton->HasAnyUserFocus())
 	{
-		return;
+		if (ParentWidget->WidgetComp == nullptr || ParentWidget->WidgetComp->bTakeFocus)
+		{
+			return;
+		}
 	}
 
 	OnNativeReleased.Broadcast();
@@ -344,8 +386,11 @@ FReply UUINavComponent::NativeOnFocusReceived(const FGeometry& InGeometry, const
 {
 	FReply Reply = Super::NativeOnFocusReceived(InGeometry, InFocusEvent);
 
-	HandleFocusReceived();
-	NavButton->SetFocus();
+	if (InFocusEvent.GetCause() != EFocusCause::Mouse || (ParentWidget->WidgetComp == nullptr || ParentWidget->WidgetComp->bTakeFocus))
+	{
+		HandleFocusReceived();
+		NavButton->SetFocus();
+	}
 
 	return Reply;
 }

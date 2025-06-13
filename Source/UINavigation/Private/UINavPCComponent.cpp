@@ -43,7 +43,7 @@
 #include "Curves/CurveFloat.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
-#include "TimerManager.h"
+#include "InputKeyEventArgs.h"
 
 const FKey UUINavPCComponent::MouseUp("MouseUp");
 const FKey UUINavPCComponent::MouseDown("MouseDown");
@@ -445,10 +445,10 @@ void UUINavPCComponent::TryResetDefaultInputs()
 {
 	UUINavDefaultInputSettings* DefaultInputSettings = GetMutableDefault<UUINavDefaultInputSettings>();
 	const uint8 CurrentInputVersion = GetDefault<UUINavSettings>()->CurrentInputVersion;
-	if (DefaultInputSettings->DefaultEnhancedInputMappings.Num() == 0 || CurrentInputVersion > DefaultInputSettings->InputVersion)
+	if (DefaultInputSettings->DefaultEnhancedInputMappings.Num() == 0 || CurrentInputVersion > DefaultInputSettings->DefaultInputVersion)
 	{
 		DefaultInputSettings->DefaultEnhancedInputMappings.Reset();
-		DefaultInputSettings->InputVersion = CurrentInputVersion;
+		DefaultInputSettings->DefaultInputVersion = CurrentInputVersion;
 		for (const UInputMappingContext* const InputContext : CachedInputContexts)
 		{
 			DefaultInputSettings->DefaultEnhancedInputMappings.Add(TSoftObjectPtr<UInputMappingContext>(FAssetData(InputContext).ToSoftObjectPath()), InputContext->GetMappings());
@@ -472,7 +472,7 @@ void UUINavPCComponent::InitPlatformData()
 	}
 }
 
-void UUINavPCComponent::ProcessRebind(const FKeyEvent& KeyEvent)
+void UUINavPCComponent::ProcessRebind(const FKeyEvent& KeyEvent, const bool bIsHold /*= false*/)
 {
 	if (!IsValid(ListeningInputBox))
 	{
@@ -484,10 +484,8 @@ void UUINavPCComponent::ProcessRebind(const FKeyEvent& KeyEvent)
 		bIgnoreSelectRelease = false;
 	}
 
-	ListeningInputBox->UpdateInputKey(KeyEvent.GetKey());
-	FTimerHandle DelayTimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(DelayTimerHandle, this, &UUINavPCComponent::RebindEnd, 0.1f, false);
-	// ListeningInputBox = nullptr;
+	ListeningInputBox->UpdateInputKey(KeyEvent.GetKey(), bIsHold);
+	ListeningInputBox = nullptr;
 	PressedNavigationDirections.Reset();
 }
 
@@ -583,12 +581,7 @@ void UUINavPCComponent::NotifyNavigatedTo(UUINavWidget* NavigatedWidget)
 		SetActiveWidget(NavigatedWidget);
 	}
 
-	UUINavWidget* CommonParent = OldActiveWidget != nullptr ? OldActiveWidget->GetMostOuterUINavWidget() : NavigatedWidget->GetMostOuterUINavWidget();
-	if (CommonParent == nullptr)
-	{
-		return;
-	}
-
+	UUINavWidget* CommonParent = OldActiveWidget != nullptr && OldActiveWidget->GetMostOuterUINavWidget() == NavigatedWidget->GetMostOuterUINavWidget() ? OldActiveWidget->GetMostOuterUINavWidget() : nullptr;
 	ActiveSubWidget = CommonParent != NavigatedWidget ? NavigatedWidget : nullptr;
 
 	uint8 Depth = 0;
@@ -615,7 +608,7 @@ void UUINavPCComponent::NotifyNavigatedTo(UUINavWidget* NavigatedWidget)
 				break;
 			}
 		}
-		else
+		else if (IsValid(CommonParent))
 		{
 			CommonParent = CommonParent->GetChildUINavWidget(OldIndex);
 		}
@@ -799,7 +792,7 @@ void UUINavPCComponent::InputKey(const FKey& Key, const EInputEvent Event, const
 {
 	if (IsValid(PC))
 	{
-		PC->InputKey(FInputKeyParams(Key, Event, Delta));
+		PC->InputKey(FInputKeyEventArgs::CreateSimulated(Key, Event, Delta));
 	}
 }
 
@@ -831,7 +824,7 @@ void UUINavPCComponent::HandleKeyDownEvent(FSlateApplication& SlateApp, const FK
 	LastPressedKeyUserIndex = InKeyEvent.GetUserIndex();
 	VerifyInputTypeChangeByKey(InKeyEvent, bShouldUnforceNavigation);
 
-	if (!bShouldUnforceNavigation)
+	if (!bShouldUnforceNavigation && IsValid(ActiveWidget))
 	{
 		bIgnoreMousePress = true;
 		SimulateMousePress();
@@ -999,6 +992,10 @@ void UUINavPCComponent::HandleMouseMoveEvent(FSlateApplication& SlateApp, const 
 				{
 					MouseKey = MouseLeft;
 				}
+			}
+			else
+			{
+				return;
 			}
 
 			const FKeyEvent MouseKeyEvent(MouseKey, FModifierKeysState(), MouseEvent.GetUserIndex(), MouseEvent.IsRepeat(), 0, 0);

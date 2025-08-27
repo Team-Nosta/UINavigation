@@ -578,6 +578,24 @@ public:
 	void MenuNext();
 	void MenuPrevious();
 
+	UFUNCTION(BlueprintCallable, Category = UINavController)
+	void SimulateStartSelect();
+
+	UFUNCTION(BlueprintCallable, Category = UINavController)
+	void SimulateStopSelect();
+
+	UFUNCTION(BlueprintCallable, Category = UINavController)
+	void SimulateSelect();
+
+	UFUNCTION(BlueprintCallable, Category = UINavController)
+	void SimulateStartReturn();
+
+	UFUNCTION(BlueprintCallable, Category = UINavController)
+	void SimulateStopReturn();
+
+	UFUNCTION(BlueprintCallable, Category = UINavController)
+	void SimulateReturn();
+
 	void NotifyNavigationKeyPressed(const FKey& Key, const EUINavigation Direction);
 	void NotifyNavigationKeyReleased(const FKey& Key, const EUINavigation Direction);
 
